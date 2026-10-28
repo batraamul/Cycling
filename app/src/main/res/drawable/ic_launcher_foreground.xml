@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vector launcher icon: two wheels and a frame. Vectors scale to any density with no PNGs. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5"
+        android:pathData="M28,64m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5"
+        android:pathData="M80,64m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0" />
+    <path android:strokeColor="#FFFFD166" android:strokeWidth="4.5" android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M28,64 L44,42 L68,42 L80,64 M44,42 L54,64 L68,42 M54,64 L28,64 M42,36 L50,36 M66,42 L64,34 L71,34" />
+</vector>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Lint says "v26" is redundant with minSdk 29, but AAPT2 cannot resolve the adaptive
+         launcher icon without it (verified: the build fails). Keep the folder; ignore here only. -->
+    <issue id="ObsoleteSdkInt">
+        <ignore path="src/main/res/mipmap-anydpi-v26" />
+    </issue>
+</lint>

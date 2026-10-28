@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Cycling</string>
+    <string name="channel_tracking">Activity tracking</string>
+    <string name="channel_alerts">Tracking alerts</string>
+</resources>

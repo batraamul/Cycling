@@ -1,0 +1,26 @@
+# ---- Build output (generated, never commit) ----
+build/
+app/build/
+.gradle/
+.kotlin/
+captures/
+*.apk
+*.aab
+output-metadata.json
+
+# ---- IDE / machine-specific ----
+.idea/
+*.iml
+.DS_Store
+local.properties
+.cxx/
+.externalNativeBuild/
+
+# ---- SECRETS (never commit) ----
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pem
+signing/
+.env
