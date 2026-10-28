@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.batraamul.cycling.core.Clock
 import com.batraamul.cycling.core.GpsFix
 import com.batraamul.cycling.core.GpsQuality
+import com.batraamul.cycling.core.PAUSED_INDEFINITELY
 import com.batraamul.cycling.core.TrackingMode
 import com.batraamul.cycling.data.AppDatabase
 import com.batraamul.cycling.data.AppRepository
@@ -19,6 +20,7 @@ import com.batraamul.cycling.tracking.StepSensor
 import com.batraamul.cycling.tracking.StepSourceKind
 import com.batraamul.cycling.tracking.TrackingEngine
 import com.batraamul.cycling.tracking.TrackingIssue
+import com.batraamul.cycling.tracking.modeState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -312,5 +314,57 @@ class TrackingEngineIntegrationTest {
         assertEquals(1, week.rides)
         assertEquals(1000.0, week.cycleDistanceM, 20.0)
         assertEquals(2100.0, week.walkDistanceM, 1e-6)
+    }
+
+    // ---------------- step pause (motorbike / car) ----------------
+
+    @Test
+    fun timedStepPauseExcludesVehicleStepsAndAutoResumes() = runBlocking {
+        engine.restore(true)
+        engine.injectCounter(1_000); engine.injectCounter(1_100)              // 100 real steps
+        assertTrue(engine.pauseSteps(clock.now + 60 * 60_000L) is CommandResult.Ok)
+        assertEquals(100L, todaySteps())                                     // saved before pausing
+        assertFalse(steps.active)
+        assertEquals(TrackingMode.WALKING, mode())
+        engine.injectCounter(1_900)                                         // motorbike vibration "steps"
+        clock.now += 61 * 60_000L                                            // pause expires
+        engine.tickNow()
+        assertTrue("auto-resumed", steps.active)
+        engine.injectCounter(1_950)                                         // first reading: baseline only
+        engine.injectCounter(2_000)                                         // +50 real walking
+        engine.flushNow()
+        assertEquals(150L, todaySteps())
+    }
+
+    @Test
+    fun indefinitePauseSurvivesRestartUntilResumed() = runBlocking {
+        engine.restore(true)
+        engine.pauseSteps(PAUSED_INDEFINITELY)
+        clock.now += 24 * 3_600_000L
+        val revived = newEngine()
+        revived.restore(fromForeground = false)                               // e.g. phone rebooted
+        assertFalse(steps.active)
+        assertTrue(revived.status.value.mode.stepsPaused)
+        assertTrue(revived.resumeSteps() is CommandResult.Ok)
+        assertTrue(steps.active)
+        assertFalse(db.tracking().state()!!.modeState().stepsPaused)
+    }
+
+    @Test
+    fun expiredPauseIsResumedOnRestore() = runBlocking {
+        engine.restore(true)
+        engine.pauseSteps(clock.now + 30 * 60_000L)
+        clock.now += 45 * 60_000L
+        val revived = newEngine()
+        revived.restore(false)
+        assertTrue(steps.active)
+        assertFalse(revived.status.value.mode.stepsPaused)
+    }
+
+    @Test
+    fun cannotPauseStepsDuringARide() = runBlocking {
+        engine.restore(true)
+        engine.startCycling(false)
+        assertTrue(engine.pauseSteps(PAUSED_INDEFINITELY) is CommandResult.Failed)
     }
 }

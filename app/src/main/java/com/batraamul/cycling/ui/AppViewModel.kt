@@ -77,6 +77,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setWalkingEnabled(enabled: Boolean) = command { controller.setWalkingEnabled(enabled) }
 
+    /** Pause step counting for [minutes] (null = until the user resumes), e.g. on a motorbike. */
+    fun pauseSteps(minutes: Int?) = viewModelScope.launch {
+        val until = minutes?.let { System.currentTimeMillis() + it * 60_000L } ?: com.batraamul.cycling.core.PAUSED_INDEFINITELY
+        when (val r = controller.pauseSteps(until)) {
+            is CommandResult.Ok -> _messages.emit(if (minutes == null) "Step counting paused until you resume." else "Step counting paused for ${minutes} min.")
+            is CommandResult.Failed -> _messages.emit(r.message)
+        }
+    }
+
+    fun resumeSteps() = viewModelScope.launch {
+        when (val r = controller.resumeSteps()) {
+            is CommandResult.Ok -> _messages.emit("Step counting resumed.")
+            is CommandResult.Failed -> _messages.emit(r.message)
+        }
+    }
+
     fun updateSettings(change: (SettingsEntity) -> SettingsEntity) = viewModelScope.launch { repo.updateSettings(change) }
 
     fun setStepSource(source: String) = viewModelScope.launch {

@@ -123,7 +123,10 @@ class TrackingEngine(
         startTicker()
 
         when (s.mode()) {
-            TrackingMode.WALKING -> if (stepSensor == null) startWalkingSensorsLocked() else Unit
+            TrackingMode.WALKING -> {
+                expireStepPauseLocked()
+                if (state?.modeState()?.countsSteps == true && stepSensor == null) startWalkingSensorsLocked()
+            }
             TrackingMode.CYCLING -> restoreRideLocked(fromForeground)
             TrackingMode.IDLE -> stopStepSensorLocked()
         }
@@ -183,7 +186,7 @@ class TrackingEngine(
             factor = if (isCalibration) 1.0 else settings.gpsFactor, activeSinceMs = now)
         val id = dao.beginRide(newRide) { rideId ->
             s.copy(mode = TrackingMode.CYCLING.name, activeRideId = rideId, ridePaused = false, rideInterrupted = false,
-                counterLastRaw = null, counterBootCount = null)
+                counterLastRaw = null, counterBootCount = null, stepsPausedUntilMs = null)
         }
         state = dao.state()
         ride = newRide.copy(id = id)
@@ -245,7 +248,7 @@ class TrackingEngine(
         val r = ride ?: dao.ride(s.activeRideId ?: -1) ?: return CommandResult.Failed(null, "No ride loaded.")
         stopLocationLocked()
         val newState = s.copy(mode = next.mode.name, activeRideId = null, ridePaused = false, rideInterrupted = false,
-            counterLastRaw = null, counterBootCount = null)
+            counterLastRaw = null, counterBootCount = null, stepsPausedUntilMs = null)
         if (discard) {
             pendingPoints.clear()
             dao.endRide(ride = null, deleteRideId = r.id, newState = newState)
@@ -275,18 +278,58 @@ class TrackingEngine(
             stopStepSensorLocked()
         }
         // Invalidate the baseline so steps taken while tracking was off are not added later.
-        val ns = s.copy(walkingEnabled = enabled, mode = next.mode.name,
+        val ns = s.copy(walkingEnabled = enabled, mode = next.mode.name, stepsPausedUntilMs = next.stepsPausedUntilMs,
             counterLastRaw = if (next.mode != s.mode()) null else s.counterLastRaw,
             counterBootCount = if (next.mode != s.mode()) null else s.counterBootCount)
         dao.saveState(ns); state = ns
-        if (running && next.mode == TrackingMode.WALKING && stepSensor == null) startWalkingSensorsLocked()
+        if (running && next.countsSteps && stepSensor == null) startWalkingSensorsLocked()
         publish()
         CommandResult.Ok()
     }
 
+    /**
+     * Pause ordinary step counting, e.g. while riding a motorbike or in a car (engine vibration and
+     * bumps would otherwise be counted as steps). Steps the sensor registers during the pause are
+     * never added: the counter baseline is invalidated, exactly as for a cycling ride.
+     * @param untilMs resume time (epoch ms) or [com.batraamul.cycling.core.PAUSED_INDEFINITELY].
+     */
+    suspend fun pauseSteps(untilMs: Long): CommandResult = mutex.withLock {
+        val s = state ?: return CommandResult.Failed(null, "Tracking has not started yet.")
+        val t = TrackingStateMachine.reduce(s.modeState(), ModeEvent.PauseSteps(untilMs))
+        if (t is Transition.Rejected) return CommandResult.Failed(null, t.reason)
+        flushStepsLocked(force = true)          // keep everything counted up to now
+        stopStepSensorLocked()
+        val ns = s.copy(stepsPausedUntilMs = untilMs, counterLastRaw = null, counterBootCount = null)
+        dao.saveState(ns); state = ns
+        publish()
+        CommandResult.Ok()
+    }
+
+    suspend fun resumeSteps(): CommandResult = mutex.withLock { resumeStepsLocked() }
+
+    private suspend fun resumeStepsLocked(): CommandResult {
+        val s = state ?: return CommandResult.Failed(null, "Tracking has not started yet.")
+        val t = TrackingStateMachine.reduce(s.modeState(), ModeEvent.ResumeSteps)
+        if (t is Transition.Rejected) return CommandResult.Failed(null, t.reason)
+        val ns = s.copy(stepsPausedUntilMs = null, counterLastRaw = null, counterBootCount = null)
+        dao.saveState(ns); state = ns
+        if (running && stepSensor == null) startWalkingSensorsLocked()
+        publish()
+        return CommandResult.Ok()
+    }
+
+    /** Auto-resume when a timed pause has run out (checked by the ticker and on restore). */
+    private suspend fun expireStepPauseLocked() {
+        val until = state?.takeIf { it.mode() == TrackingMode.WALKING }?.stepsPausedUntilMs ?: return
+        if (until != com.batraamul.cycling.core.PAUSED_INDEFINITELY && clock.nowMs() >= until) resumeStepsLocked()
+    }
+
+    /** Test hook: run the periodic checks immediately. */
+    internal suspend fun tickNow() = mutex.withLock { expireStepPauseLocked(); maybeFlushLocked() }
+
     /** Re-reads settings that affect sensors (e.g. step-source override) and restarts the step sensor. */
     suspend fun restartStepSensor() = mutex.withLock {
-        if (state?.mode() == TrackingMode.WALKING && running) {
+        if (state?.modeState()?.countsSteps == true && running) {
             flushStepsLocked(force = true)
             stopStepSensorLocked()
             startWalkingSensorsLocked()
@@ -484,7 +527,7 @@ class TrackingEngine(
             while (isActive) {
                 delay(tickerMs)
                 mutex.withLock {
-                    if (state?.mode() == TrackingMode.WALKING) maybeFlushLocked()
+                    if (state?.mode() == TrackingMode.WALKING) { expireStepPauseLocked(); maybeFlushLocked() }
                     publish()
                 }
             }
@@ -523,4 +566,4 @@ class TrackingEngine(
 private fun TrackerStateEntity.mode(): TrackingMode = runCatching { TrackingMode.valueOf(mode) }.getOrDefault(TrackingMode.IDLE)
 
 fun TrackerStateEntity.modeState(): ModeState =
-    ModeState(mode(), walkingEnabled, activeRideId, ridePaused, rideInterrupted)
+    ModeState(mode(), walkingEnabled, activeRideId, ridePaused, rideInterrupted, stepsPausedUntilMs)

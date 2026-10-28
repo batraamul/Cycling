@@ -12,8 +12,9 @@
 | `core/StepCounterMathTest` | 6 | Baseline logic: no double counting on replay, reboot detection, glitch rejection |
 | `core/DistanceAccumulatorTest` | 6 | 1 km ride measured within 1.5 %; parked bike accumulates < 10 m; jumps/poor fixes rejected; pause gaps not bridged |
 | `core/CalibrationTest` | 11 | `N × d / 1000`, median of repeats, course mode, GPS quality rules, factor combination, calories |
-| `core/TrackingStateMachineTest` | 7 | Walking and cycling are mutually exclusive; pause does not resume walking |
-| `integration/TrackingEngineIntegrationTest` | 12 | Real Room database + fake sensors: the mode controller end to end (see below) |
+| `core/TrackingStateMachineTest` | 10 | Walking and cycling are mutually exclusive; ride pause does not resume walking; step-pause rules |
+| `integration/TrackingEngineIntegrationTest` | 16 | Real Room database + fake sensors: the mode controller end to end (see below) |
+| `integration/DatabaseMigrationTest` | 1 | A v1.0.0 database upgrades to schema 2 with history and step baseline intact |
 
 Integration tests map to the acceptance workflow:
 
@@ -31,6 +32,8 @@ Integration tests map to the acceptance workflow:
 | Permission revoked | `missingActivityPermissionIsReportedNotIgnored` |
 | 4 GPS calibration apply/decline/reset | `gpsCalibrationIsAppliedOnlyWhenConfirmedAndCanBeReset` |
 | 15 Weekly analytics | `weeklyAnalyticsSeparateWalkingAndCycling` |
+| Pause steps (motorbike), auto-resume | `timedStepPauseExcludesVehicleStepsAndAutoResumes` |
+| Pause survives reboot | `indefinitePauseSurvivesRestartUntilResumed`, `expiredPauseIsResumedOnRestore` |
 
 **Limits:** these tests use fake sensors. They prove the *logic*; they cannot prove that OxygenOS keeps the
 service alive or that the phone's sensors behave as assumed. That is what the on-phone test below is for.
@@ -54,6 +57,10 @@ service alive or that the phone's sensors behave as assumed. That is what the on
 | 13 | Steps did not jump after the ride | Compare step count before/after | ☐ |
 | 14 | Force-close & reopen app; reboot phone | Totals unchanged; tracking resumes after reboot | ☐ |
 | 15 | Analysis → this week shows the ride and steps | | ☐ |
+
+**v1.1.0 extra checks:** (a) install v1.1.0 *over* v1.0.0 → history still there; (b) tap *Pause step counting › 30 min*,
+ride a motorbike or shake the phone in a pocket → step total unchanged; after 30 min the status returns to
+*Walking Tracking Active*; (c) use **Pause steps 1 h** from the notification.
 
 Also check: **Settings › Sensors on this phone** — record whether a *Step counter* is listed. If it says
 "not present", select *Automatic* anyway (the app falls back to the accelerometer) and repeat steps 6–7 carefully.

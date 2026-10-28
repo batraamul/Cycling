@@ -26,8 +26,8 @@ val releaseStoreFile = secret("CYCLING_KEYSTORE_PATH", "storeFile")
 val hasReleaseSigning = releaseStoreFile != null && file(releaseStoreFile).exists()
 
 // Version: bump versionCode for every release you install over an older one.
-val appVersionCode = 1
-val appVersionName = "1.0.0"
+val appVersionCode = 2
+val appVersionName = "1.1.0"
 
 android {
     namespace = "com.batraamul.cycling"
@@ -77,6 +77,9 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true   // needed by Robolectric
     }
+    // Exported Room schemas are added to DEBUG assets so the Robolectric migration test can rebuild old
+    // database versions. (Robolectric reads the variant's merged assets.) They are never in the release APK.
+    sourceSets.getByName("debug").assets.srcDir("$projectDir/schemas")
     lint {
         // Library versions are pinned deliberately (newest releases need compileSdk 37 + AGP 9; see docs/ARCHITECTURE.md),
         // so "newer version available" notices are silenced. Every other lint error fails the build.
@@ -123,4 +126,5 @@ dependencies {
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.room.testing)
 }

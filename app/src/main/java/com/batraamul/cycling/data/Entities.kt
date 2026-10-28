@@ -86,6 +86,8 @@ data class TrackerStateEntity(
     val counterLastRaw: Long? = null,
     val counterBootCount: Int? = null,
     val lastFlushMs: Long = 0,
+    /** Added in schema v2 (app v1.1.0): step counting paused until this time (Long.MAX_VALUE = until resumed). */
+    val stepsPausedUntilMs: Long? = null,
 )
 
 object StepSourceSetting {
