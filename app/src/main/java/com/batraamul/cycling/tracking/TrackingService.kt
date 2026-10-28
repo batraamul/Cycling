@@ -15,7 +15,10 @@ import androidx.lifecycle.lifecycleScope
 import com.batraamul.cycling.CyclingApp
 import com.batraamul.cycling.MainActivity
 import com.batraamul.cycling.R
+import android.text.format.DateFormat
+import com.batraamul.cycling.core.PAUSED_INDEFINITELY
 import com.batraamul.cycling.core.SystemClock
+import java.util.Date
 import com.batraamul.cycling.core.TrackingMode
 import com.batraamul.cycling.core.key
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -74,6 +77,8 @@ class TrackingService : LifecycleService(), EngineHooks {
             }
             ACTION_PAUSE -> lifecycleScope.launch { engine.pauseRide() }
             ACTION_RESUME -> lifecycleScope.launch { engine.resumeRide() }
+            ACTION_PAUSE_STEPS -> lifecycleScope.launch { engine.pauseSteps(System.currentTimeMillis() + 60 * 60_000L) }
+            ACTION_RESUME_STEPS -> lifecycleScope.launch { engine.resumeSteps() }
         }
         // START_STICKY: if Android kills the process, it recreates the service (with a null intent).
         return START_STICKY
@@ -176,6 +181,13 @@ class TrackingService : LifecycleService(), EngineHooks {
                         .addAction(0, "Pause", serviceIntent(ACTION_PAUSE))
                 }
             }
+            s.mode.stepsPaused -> {
+                val until = s.mode.stepsPausedUntilMs!!
+                b.setContentTitle("Step counting paused")
+                    .setContentText(if (until == PAUSED_INDEFINITELY) "Until you resume · ${nf.format(todaySteps)} steps today"
+                        else "Resumes at ${DateFormat.getTimeFormat(this).format(Date(until))} · ${nf.format(todaySteps)} steps today")
+                    .addAction(0, "Resume steps", serviceIntent(ACTION_RESUME_STEPS))
+            }
             s.mode.mode == TrackingMode.WALKING -> {
                 val steps = todaySteps + s.pendingSteps
                 val issue = when {
@@ -185,6 +197,7 @@ class TrackingService : LifecycleService(), EngineHooks {
                 }
                 b.setContentTitle(if (issue == null) "Walking Tracking Active" else "Walking tracking needs attention")
                     .setContentText(issue ?: "${nf.format(steps)} steps today · ${String.format(Locale.getDefault(), "%.2f km", todayDistanceM / 1000)}")
+                if (issue == null) b.addAction(0, "Pause steps 1 h", serviceIntent(ACTION_PAUSE_STEPS))
             }
             else -> b.setContentTitle("Tracking starting…")
         }
@@ -200,6 +213,8 @@ class TrackingService : LifecycleService(), EngineHooks {
         const val ACTION_UPDATE = "com.batraamul.cycling.UPDATE"
         const val ACTION_PAUSE = "com.batraamul.cycling.PAUSE"
         const val ACTION_RESUME = "com.batraamul.cycling.RESUME"
+        const val ACTION_PAUSE_STEPS = "com.batraamul.cycling.PAUSE_STEPS"
+        const val ACTION_RESUME_STEPS = "com.batraamul.cycling.RESUME_STEPS"
         const val EXTRA_FROM_FOREGROUND = "fromForeground"
         const val CHANNEL_TRACKING = "tracking"
         const val CHANNEL_ALERTS = "alerts"

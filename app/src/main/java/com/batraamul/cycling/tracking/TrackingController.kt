@@ -31,6 +31,8 @@ class TrackingController(private val context: Context, private val engine: Track
         if (enabled) ensureRunning() else refresh()
     }
     suspend fun restartStepSensor() = engine.restartStepSensor()
+    suspend fun pauseSteps(untilMs: Long) = engine.pauseSteps(untilMs).also { refresh() }
+    suspend fun resumeSteps() = engine.resumeSteps().also { refresh() }
 
     private fun refresh() = send(TrackingService.ACTION_UPDATE, fromForeground = true)
 

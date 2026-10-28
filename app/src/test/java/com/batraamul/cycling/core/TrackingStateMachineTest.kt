@@ -62,4 +62,29 @@ class TrackingStateMachineTest {
         assertTrue(TrackingStateMachine.reduce(walking, ModeEvent.FinishRide) is Transition.Rejected)
         assertTrue(TrackingStateMachine.reduce(walking, ModeEvent.PauseRide) is Transition.Rejected)
     }
+
+    @Test
+    fun pausingStepsStopsCountingButStaysInWalkingMode() {
+        val p = ok(walking, ModeEvent.PauseSteps(untilMs = 5_000))
+        assertEquals(TrackingMode.WALKING, p.mode)
+        assertTrue(p.stepsPaused)
+        assertFalse(p.countsSteps)
+        assertFalse(p.recordsGps)
+        assertTrue(ok(p, ModeEvent.ResumeSteps).countsSteps)
+    }
+
+    @Test
+    fun stepPauseOnlyAllowedWhileWalking() {
+        val c = ok(walking, ModeEvent.StartCycling(1))
+        assertTrue(TrackingStateMachine.reduce(c, ModeEvent.PauseSteps(PAUSED_INDEFINITELY)) is Transition.Rejected)
+        assertTrue(TrackingStateMachine.reduce(walking, ModeEvent.ResumeSteps) is Transition.Rejected)
+    }
+
+    @Test
+    fun startingARideClearsAStepPause() {
+        val p = ok(walking, ModeEvent.PauseSteps(PAUSED_INDEFINITELY))
+        val afterRide = ok(ok(p, ModeEvent.StartCycling(1)), ModeEvent.FinishRide)
+        assertTrue(afterRide.countsSteps)
+        assertNull(afterRide.stepsPausedUntilMs)
+    }
 }

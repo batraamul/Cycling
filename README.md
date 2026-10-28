@@ -22,8 +22,10 @@ Target device: OnePlus 11R 5G (OxygenOS). Works on any Android 10+ phone.
 4. Tap **Install**, then **Open**.
 5. Complete onboarding: height/weight → permissions → battery settings → **Start tracking**.
 
-**Updating:** install the newer APK over the old one. Your data is kept *as long as both APKs are signed with
-the same release key* (all official releases are). Never uninstall to "update" — uninstalling deletes your history.
+**Updating to a newer version:** download the newer `Cycling-vX.Y.Z.apk` and open it — Android shows **Update**
+instead of Install. Your data is kept *as long as both APKs are signed with the same release key* (all official
+releases are) and the version number is higher. **Never uninstall to "update"** — uninstalling deletes your history.
+The app has no internet access, so it cannot update itself; check the Releases page for new versions.
 
 **Debug builds** (from the Actions tab) have the package name `com.batraamul.cycling.debug` and install *alongside*
 the release app as a separate test app with its own data.
@@ -57,6 +59,12 @@ adb install -r Cycling-v1.0.0.apk             # -r = replace/update, keeps data
 
 Steps you take while a ride is active (e.g. pushing the bike) are intentionally **not** counted.
 
+### Pause step counting (motorbike, car, bus)
+Engine vibration and road bumps can be miscounted as steps. On the Today screen tap **Pause step counting** and
+choose 30 min, 1 h, 2 h or *until I resume* — or use **Pause steps 1 h** in the notification. Timed pauses resume
+automatically; **Resume** is available on the Today screen and in the notification. Use **Start Cycling** for a
+bicycle ride instead (it pauses steps *and* records the ride).
+
 ### OnePlus / OxygenOS battery settings
 OxygenOS may stop background apps. In onboarding (or Settings) tap **Allow unrestricted battery**, and in
 *App settings › Battery usage* enable **Allow background activity**. Optionally lock the app in Recent apps.
@@ -70,7 +78,7 @@ Requirements: JDK 17+, Android SDK (platform 36, build-tools 36). Android Studio
 ```bash
 git clone https://github.com/batraamul/Cycling.git && cd Cycling
 echo "sdk.dir=$HOME/Android/Sdk" > local.properties        # path to your Android SDK
-./gradlew testDebugUnitTest      # 47 unit + integration tests
+./gradlew testDebugUnitTest      # 55 unit, integration and migration tests
 ./gradlew lintDebug              # static checks
 ./gradlew assembleDebug          # → app/build/outputs/apk/debug/app-debug.apk
 ```

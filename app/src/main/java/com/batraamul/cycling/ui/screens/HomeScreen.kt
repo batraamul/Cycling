@@ -1,6 +1,7 @@
 package com.batraamul.cycling.ui.screens
 
 import android.Manifest
+import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -18,13 +19,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -36,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.batraamul.cycling.core.Confidence
+import com.batraamul.cycling.core.PAUSED_INDEFINITELY
 import com.batraamul.cycling.core.TrackingMode
 import com.batraamul.cycling.data.StepLengthSource
 import com.batraamul.cycling.tracking.StepSourceKind
@@ -58,6 +65,7 @@ import com.batraamul.cycling.ui.theme.NumberStyle
 import com.batraamul.cycling.ui.theme.SceneArtwork
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Date
 
 @Composable
 fun HomeScreen(vm: AppViewModel, nav: NavController) {
@@ -76,6 +84,7 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
     val mode = live.mode
 
     val startCycling = { vm.startCycling(false) { nav.navigate(Routes.RIDE) } }
+    var showPauseDialog by remember { mutableStateOf(false) }
     val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         if (r[Manifest.permission.ACCESS_FINE_LOCATION] == true) startCycling()
     }
@@ -84,6 +93,7 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
         mode.mode == TrackingMode.CYCLING && mode.rideInterrupted -> "Ride interrupted — Walking Paused" to Color(0xFFFFB020)
         mode.mode == TrackingMode.CYCLING && mode.ridePaused -> "Ride paused — Walking Paused" to Color(0xFFFFB020)
         mode.mode == TrackingMode.CYCLING -> "Cycling Active — Walking Paused" to Color(0xFF4FC3F7)
+        mode.stepsPaused -> "Step counting paused" to Color(0xFFFFB020)
         mode.mode == TrackingMode.WALKING && live.issues.isEmpty() && live.engineRunning -> "Walking Tracking Active" to Color(0xFF5BE38C)
         mode.mode == TrackingMode.IDLE && !mode.walkingEnabled -> "Walking tracking off" to Color(0xFFB0B0B0)
         else -> "Tracking needs attention" to Color(0xFFFF6B6B)
@@ -153,6 +163,17 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
                     ) { Text("Start Cycling", style = MaterialTheme.typography.titleMedium) }
                 }
 
+                if (mode.stepsPaused) {
+                    val until = mode.stepsPausedUntilMs!!
+                    Banner(
+                        if (until == PAUSED_INDEFINITELY) "Step counting is paused until you resume it. Steps are not being counted."
+                        else "Step counting is paused until ${DateFormat.getTimeFormat(ctx).format(Date(until))}, then resumes automatically.",
+                    ) { TextButton(onClick = { vm.resumeSteps() }) { Text("Resume") } }
+                } else if (mode.mode == TrackingMode.WALKING) {
+                    OutlinedButton(onClick = { showPauseDialog = true }, modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(18.dp)) { Text("Pause step counting (motorbike, car, bus…)") }
+                }
+
                 AppCard(Modifier.clickable { nav.navigate(Routes.CALIBRATION) }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Calibration Centre", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -186,6 +207,31 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
             }
         }
     }
+    if (showPauseDialog) {
+        PauseStepsDialog(onPick = { showPauseDialog = false; vm.pauseSteps(it) }, onDismiss = { showPauseDialog = false })
+    }
+}
+
+@Composable
+private fun PauseStepsDialog(onPick: (Int?) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Pause step counting") },
+        text = {
+            Column {
+                Text("Use this while riding a motorbike or travelling by car/bus: vibration and bumps can be counted as steps. " +
+                    "Steps already counted today are kept. (For a bicycle ride, use Start Cycling instead — it pauses steps and records the ride.)",
+                    style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(12.dp))
+                listOf(30 to "30 minutes", 60 to "1 hour", 120 to "2 hours").forEach { (m, label) ->
+                    TextButton(onClick = { onPick(m) }, modifier = Modifier.fillMaxWidth()) { Text(label) }
+                }
+                TextButton(onClick = { onPick(null) }, modifier = Modifier.fillMaxWidth()) { Text("Until I resume") }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
