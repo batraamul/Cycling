@@ -14,6 +14,18 @@ object Fmt {
     fun km3(m: Double): String = String.format(Locale.US, "%.3f", m / 1000.0)
     fun kcal(k: Double): String = int().format(k.toLong())
     fun speedKmh(mps: Double?): String = if (mps == null || mps.isNaN()) "–" else String.format(Locale.getDefault(), "%.1f", mps * 3.6)
+    /** Running pace from speed, as minutes:seconds per km ("5:32"). */
+    fun pace(mps: Double?): String {
+        if (mps == null || mps.isNaN() || mps < 0.3) return "–"
+        val secPerKm = (1000.0 / mps).toLong()
+        if (secPerKm >= 60 * 60) return "–"
+        return String.format(Locale.US, "%d:%02d", secPerKm / 60, secPerKm % 60)
+    }
+    fun bytes(n: Long): String = when {
+        n >= 1_000_000 -> String.format(Locale.US, "%.1f MB", n / 1e6)
+        n >= 1_000 -> String.format(Locale.US, "%.0f kB", n / 1e3)
+        else -> "$n bytes"
+    }
     fun factor(k: Double): String = String.format(Locale.US, "%.4f", k)
     fun pct(k: Double): String = String.format(Locale.US, "%+.1f %%", (k - 1) * 100)
     fun stepCm(m: Double): String = String.format(Locale.getDefault(), "%.1f cm", m * 100)

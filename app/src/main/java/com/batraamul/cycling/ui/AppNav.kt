@@ -45,6 +45,9 @@ import com.batraamul.cycling.ui.screens.RideScreen
 import com.batraamul.cycling.ui.screens.SettingsScreen
 import com.batraamul.cycling.ui.screens.StepCalibrationScreen
 import com.batraamul.cycling.ui.theme.CyclingTheme
+import com.batraamul.cycling.ui.theme.LocalThemeSpec
+import com.batraamul.cycling.ui.theme.themeTexture
+import androidx.compose.ui.graphics.Color
 
 object Routes {
     const val ONBOARDING = "onboarding"
@@ -66,7 +69,7 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 private val tabs = listOf(
     Tab(Routes.HOME, "Today", Icons.Filled.Home),
     Tab(Routes.ANALYTICS, "Analysis", Icons.Filled.DateRange),
-    Tab(Routes.HISTORY, "Rides", Icons.Filled.List),
+    Tab(Routes.HISTORY, "Activities", Icons.Filled.List),
     Tab(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )
 
@@ -90,8 +93,11 @@ fun CyclingAppUi(vm: AppViewModel = viewModel()) {
         LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
         val current by nav.currentBackStackEntryAsState()
         val route = current?.destination?.route
+        val spec = LocalThemeSpec.current
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
+            // The textured background sits behind every screen; screens themselves stay transparent.
+            modifier = Modifier.background(MaterialTheme.colorScheme.background).themeTexture(spec),
+            containerColor = Color.Transparent,
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
                 if (tabs.any { it.route == route }) {

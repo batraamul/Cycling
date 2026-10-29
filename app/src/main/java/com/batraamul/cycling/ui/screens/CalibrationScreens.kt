@@ -362,7 +362,7 @@ fun GpsCalibrationIntroScreen(vm: AppViewModel, nav: NavController) {
             )
         }
         Banner("The correction is only applied if you confirm it and the GPS quality was good enough. Poor-quality traces are rejected automatically.", warning = false)
-        if (live.mode.mode == TrackingMode.CYCLING) {
+        if (live.mode.inSession) {
             Banner("A ride is already in progress. Finish or discard it first.")
             Button(onClick = { nav.navigate(Routes.RIDE) }, modifier = Modifier.fillMaxWidth()) { Text("Open current ride") }
         } else {

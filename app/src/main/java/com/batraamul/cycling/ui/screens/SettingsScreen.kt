@@ -64,7 +64,7 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
         Text("Settings", style = MaterialTheme.typography.headlineMedium)
 
         SectionTitle("Theme")
-        // Eight themes, one shared app: only colours and artwork change. Artwork is drawn on demand.
+        // Ten themes, one shared app: only colours, texture and artwork change. Artwork is drawn on demand.
         AppThemes.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 row.forEach { t ->
@@ -90,7 +90,7 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Count steps in the background", style = MaterialTheme.typography.titleSmall)
-                    Text("On by default. Paused automatically during rides.", style = MaterialTheme.typography.bodySmall,
+                    Text("On by default. Paused automatically during any activity.", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = live.mode.walkingEnabled, onCheckedChange = { vm.setWalkingEnabled(it) })
@@ -110,6 +110,9 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
             Text(sensorInfo, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
+        SectionTitle("Backup & restore (Google Drive)")
+        BackupCard(vm)
+
         SectionTitle("Profile")
         ProfileCard(s.heightCm, s.weightKg, s.dailyStepGoal) { h, w, g -> vm.updateSettings { it.copy(heightCm = h, weightKg = w, dailyStepGoal = g) } }
 
@@ -127,9 +130,9 @@ fun SettingsScreen(vm: AppViewModel, nav: NavController) {
         SectionTitle("About")
         AppCard {
             KeyValue("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-            KeyValue("Data", "Stored only on this phone")
-            Text("Step counts during a ride are deliberately not recorded: if you dismount and walk while a ride is active, " +
-                "those steps are excluded. Calorie values are estimates.", style = MaterialTheme.typography.bodySmall,
+            KeyValue("Data", "On this phone, plus your own backup file if you set one up")
+            Text("Daily walking steps pause during any activity. Running, jogging and treadmill steps are stored with that session; " +
+                "steps taken during a bicycle ride or exercise session are not counted. Calorie values are estimates.", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(16.dp))

@@ -1,6 +1,13 @@
 package com.batraamul.cycling.ui
 
 import android.app.Application
+import android.net.Uri
+import com.batraamul.cycling.backup.BackupPrefs
+import com.batraamul.cycling.backup.DriveBackup
+import com.batraamul.cycling.data.BackupPreview
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.batraamul.cycling.CyclingApp
@@ -57,6 +64,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun startSession(type: com.batraamul.cycling.core.ActivityType, onStarted: (Long) -> Unit) = viewModelScope.launch {
+        when (val r = controller.startSession(type)) {
+            is CommandResult.Ok -> onStarted(r.rideId ?: 0)
+            is CommandResult.Failed -> _messages.emit(r.message)
+        }
+    }
+
     fun pause() = command { controller.pause() }
     fun resume() = command { controller.resume() }
     fun recover() = command { controller.recover() }
@@ -70,7 +84,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun discard(onDone: () -> Unit) = viewModelScope.launch {
         when (val r = controller.discard()) {
-            is CommandResult.Ok -> { _messages.emit("Ride discarded. Walking tracking resumed."); onDone() }
+            is CommandResult.Ok -> { _messages.emit("Activity discarded. Walking tracking resumed."); onDone() }
             is CommandResult.Failed -> _messages.emit(r.message)
         }
     }
@@ -121,6 +135,90 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun resetGps() = viewModelScope.launch {
         repo.resetGpsCalibration()
         _messages.emit("GPS distance reset to the default calculation (factor 1.0000).")
+    }
+
+    // =============================== backup & restore ===============================
+
+    data class BackupUiState(
+        val fileLabel: String? = null,
+        val onDrive: Boolean = false,
+        val auto: Boolean = false,
+        val lastSuccessMs: Long = 0,
+        val lastSizeBytes: Long = 0,
+        val lastError: String? = null,
+        val busy: Boolean = false,
+    )
+
+    private val app = getApplication<Application>()
+    private val prefs = BackupPrefs(app)
+    private val _backup = MutableStateFlow(BackupUiState())
+    val backup: StateFlow<BackupUiState> = _backup
+    private val _restorePreview = MutableStateFlow<Pair<Uri, BackupPreview>?>(null)
+    val restorePreview: StateFlow<Pair<Uri, BackupPreview>?> = _restorePreview
+
+    fun refreshBackupState(busy: Boolean = false) {
+        _backup.value = BackupUiState(prefs.fileLabel, DriveBackup.isOnDrive(prefs.uri), prefs.auto, prefs.lastSuccessMs,
+            prefs.lastSizeBytes, prefs.lastError, busy)
+    }
+
+    /** The user created/picked the backup file (ideally in Google Drive): remember it, back up now, turn on daily backups. */
+    fun backupFileChosen(uri: Uri) = viewModelScope.launch {
+        DriveBackup.rememberFile(app, uri)
+        prefs.auto = true
+        DriveBackup.schedule(app, true)
+        runBackup()
+    }
+
+    fun backupNow() = viewModelScope.launch { runBackup() }
+
+    private suspend fun runBackup() {
+        refreshBackupState(busy = true)
+        val outcome = withContext(Dispatchers.IO) { DriveBackup.backupNow(app, manual = true) }
+        refreshBackupState()
+        _messages.emit(when (outcome) {
+            is DriveBackup.Outcome.Saved -> "Backup saved (${Fmt.bytes(outcome.bytes)}). Google Drive uploads it when the phone is online."
+            is DriveBackup.Outcome.Failed -> "Backup failed: ${outcome.message}"
+            DriveBackup.Outcome.SkippedEmpty -> "Nothing to back up yet."
+        })
+    }
+
+    fun setAutoBackup(on: Boolean) {
+        prefs.auto = on
+        DriveBackup.schedule(app, on)
+        refreshBackupState()
+    }
+
+    /** Step 1 of restore: read the chosen file and show what it contains. Nothing is changed yet. */
+    fun openRestoreFile(uri: Uri) = viewModelScope.launch {
+        try {
+            val preview = withContext(Dispatchers.IO) {
+                app.contentResolver.openInputStream(uri)?.reader(Charsets.UTF_8)?.buffered()?.use { container.backup.preview(it) }
+                    ?: throw IllegalStateException("The file could not be opened.")
+            }
+            _restorePreview.value = uri to preview
+        } catch (e: Exception) {
+            _messages.emit(e.message ?: "The file could not be read.")
+        }
+    }
+
+    fun cancelRestore() { _restorePreview.value = null }
+
+    /** Step 2: merge the backup into this phone's data (after the user confirmed). */
+    fun confirmRestore() = viewModelScope.launch {
+        val (uri, _) = _restorePreview.value ?: return@launch
+        _restorePreview.value = null
+        if (live.value.mode.inSession) { _messages.emit("Finish the current activity before restoring a backup."); return@launch }
+        try {
+            val r = withContext(Dispatchers.IO) {
+                app.contentResolver.openInputStream(uri)?.reader(Charsets.UTF_8)?.buffered()?.use { container.backup.restore(it) }
+                    ?: throw IllegalStateException("The file could not be opened.")
+            }
+            controller.restartStepSensor()
+            _messages.emit("Restored: ${r.daysAdded} days added, ${r.daysUpdated} updated, ${r.sessionsAdded} activities added" +
+                (if (r.sessionsAlreadyPresent > 0) " (${r.sessionsAlreadyPresent} already here)" else "") + ".")
+        } catch (e: Exception) {
+            _messages.emit("Restore failed, nothing was changed: ${e.message}")
+        }
     }
 
     private fun command(block: suspend () -> CommandResult) = viewModelScope.launch {

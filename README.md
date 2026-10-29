@@ -3,11 +3,13 @@
 A lightweight native Android app (Kotlin + Jetpack Compose) that:
 
 - **counts your walking steps all day in the background** (screen off, other apps open, after reboot),
-- **records cycling rides with GPS** when you press **Start Cycling**,
-- keeps the two **mutually exclusive**, so the same movement is never counted twice,
+- **records activity sessions**: 🚴 Cycling and 🏃 Running / 👟 Jogging (GPS + steps), 🔁 Treadmill (steps × step
+  length, no GPS) and 💪 Exercise (time + calories),
+- keeps walking and every activity **mutually exclusive**, so the same movement is never counted twice,
+- **backs up to your Google Drive** as a JSON file every day, and restores it after a phone reset,
 - lets you **calibrate** your step length and GPS distance on a known 1 km course,
 - stores everything **only on your phone**, and
-- comes in **eight visual themes** with vector artwork (release APK ≈ 3 MB).
+- comes in **ten visual themes** (including Army and Air Force) with vector artwork and textures (release APK ≈ 3 MB).
 
 Target device: OnePlus 11R 5G (OxygenOS). Works on any Android 10+ phone.
 
@@ -46,8 +48,8 @@ adb install -r Cycling-v1.0.0.apk             # -r = replace/update, keeps data
 | **Ride** | Live distance, time, speed, GPS accuracy, route; Pause/Resume, Finish Cycling, Discard |
 | **Calibration Centre** | Step length (single-step, course, manual; walking & running) and 1 km GPS calibration |
 | **Analysis** | Weekly bar charts and totals, all-time totals |
-| **Rides** | Ride history (paged) and ride details with route and raw vs corrected distance |
-| **Settings** | 8 themes, walking on/off, step-sensor choice, profile, permissions, battery guide |
+| **Activities** | History of all sessions (paged) with type, route (GPS types), steps, pace and raw vs corrected distance |
+| **Settings** | 10 themes, walking on/off, **Google Drive backup & restore**, step-sensor choice, profile, permissions, battery guide |
 
 ### Tracking modes
 - **Default: Walking ON.** Status shows *Walking Tracking Active*. No GPS is used for walking.
@@ -58,6 +60,26 @@ adb install -r Cycling-v1.0.0.apk             # -r = replace/update, keeps data
 - **Discard** (with confirmation) deletes only that ride.
 
 Steps you take while a ride is active (e.g. pushing the bike) are intentionally **not** counted.
+
+### Activity types
+| Activity | Uses | Distance from |
+|---|---|---|
+| Cycling | GPS | GPS × your cycling calibration |
+| Running, Jogging | GPS + step sensor | GPS; steps and cadence recorded too |
+| Treadmill | step sensor (no GPS) | steps × step length — calibrate a *running* step length for accuracy |
+| Exercise (gym, yoga…) | timer only | — (calories estimated at MET 5) |
+
+Steps from running, jogging and treadmill sessions count towards your daily step total (once).
+
+### Backup to Google Drive
+**Settings › Backup & restore › Set up Google Drive backup** → in the file picker tap ☰ › **Drive**, pick a folder,
+**Save**. The app then refreshes that file every day and a few minutes after each activity. The Google Drive app
+uploads it — this app itself still has **no internet permission** and needs no Google sign-in.
+
+**After a factory reset / on a new phone:** install the APK → on the first onboarding screen tap **Restore from a
+backup file** → choose `Cycling-backup.json` in Drive → check the summary → **Restore**. Restore *merges*: nothing
+on the phone is deleted and restoring twice changes nothing. Then set up the backup file again (Android forgets
+the file permission after a reset).
 
 ### Pause step counting (motorbike, car, bus)
 Engine vibration and road bumps can be miscounted as steps. On the Today screen tap **Pause step counting** and
@@ -78,7 +100,7 @@ Requirements: JDK 17+, Android SDK (platform 36, build-tools 36). Android Studio
 ```bash
 git clone https://github.com/batraamul/Cycling.git && cd Cycling
 echo "sdk.dir=$HOME/Android/Sdk" > local.properties        # path to your Android SDK
-./gradlew testDebugUnitTest      # 55 unit, integration and migration tests
+./gradlew testDebugUnitTest      # 74 unit, integration, migration and backup tests
 ./gradlew lintDebug              # static checks
 ./gradlew assembleDebug          # → app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -107,5 +129,11 @@ See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for how it all works and **
 for the on-phone acceptance test and battery test plan.
 
 ## Privacy
-No accounts, no network access, no analytics. The app does not even request the INTERNET permission.
-Data is excluded from cloud backup.
+No accounts, no network access, no analytics. The app does not request the INTERNET permission
+(WorkManager adds ACCESS_NETWORK_STATE, which can only check whether a connection exists).
+Data is excluded from Android's automatic cloud backup; your own JSON backup goes only to the file you choose.
+
+## Screenshots (rendered by the opt-in screenshot test)
+| Army | Air Force | Midnight Neon |
+|---|---|---|
+| ![Army](docs/screenshots/army.jpg) | ![Air Force](docs/screenshots/air-force.jpg) | ![Midnight Neon](docs/screenshots/midnight-neon.jpg) |

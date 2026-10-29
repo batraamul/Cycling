@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -75,6 +76,11 @@ fun AnalyticsScreen(vm: AppViewModel) {
             BarChart(w.days.map { it.cycleDistanceM / 1000 }, labels, color = MaterialTheme.colorScheme.secondary, highlightIndex = todayIndex,
                 valueFormatter = { String.format(Locale.US, "%.1f", it) })
         }
+        if (w.runSessions > 0) AppCard {
+            Text("Running, jogging & treadmill (km)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            BarChart(w.days.map { it.runDistanceM / 1000 }, labels, color = MaterialTheme.colorScheme.tertiary, highlightIndex = todayIndex,
+                valueFormatter = { String.format(Locale.US, "%.1f", it) })
+        }
         SectionTitle("Week totals")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile("Steps", Fmt.steps(w.steps), "", Modifier.weight(1f))
@@ -85,15 +91,21 @@ fun AnalyticsScreen(vm: AppViewModel) {
             StatTile("Rides", "${w.rides}", "", Modifier.weight(1f), accent = MaterialTheme.colorScheme.secondary)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("Ride time", Fmt.durationShort(w.cycleElapsedMs), "", Modifier.weight(1f), accent = MaterialTheme.colorScheme.tertiary)
-            StatTile("Calories (est.)", Fmt.kcal(w.kcal), "kcal", Modifier.weight(1f), accent = MaterialTheme.colorScheme.tertiary)
+            StatTile("Running", Fmt.km(w.runDistanceM, 1), "km", Modifier.weight(1f), accent = MaterialTheme.colorScheme.tertiary)
+            StatTile("Runs / treadmill", "${w.runSessions}", "", Modifier.weight(1f), accent = MaterialTheme.colorScheme.tertiary)
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile("Exercise time", Fmt.durationShort(w.exerciseMs), "", Modifier.weight(1f), accent = MaterialTheme.colorScheme.primary)
+            StatTile("Ride time", Fmt.durationShort(w.cycleElapsedMs), "", Modifier.weight(1f), accent = MaterialTheme.colorScheme.secondary)
+        }
+        StatTile("Calories (est.)", Fmt.kcal(w.kcal), "kcal", Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.tertiary)
         AppCard {
-            val activeDays = w.days.count { it.steps > 0 || it.rides > 0 }
+            val activeDays = w.days.count { it.steps > 0 || it.activities > 0 }
             KeyValue("Daily average steps", Fmt.steps(if (activeDays == 0) 0 else w.steps / activeDays))
             KeyValue("Active days", "$activeDays of 7")
-            KeyValue("Total active distance", "${Fmt.km(w.walkDistanceM + w.cycleDistanceM, 1)} km")
-            Text("Walking and cycling are recorded separately: steps are paused during rides, so no movement is counted twice.",
+            KeyValue("Total active distance", "${Fmt.km(w.walkDistanceM + w.cycleDistanceM + w.runDistanceM, 1)} km")
+            Text("Walking and each activity are recorded separately: daily walking pauses during any activity, so no movement is counted twice. " +
+                "Step totals include steps from running and treadmill sessions.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         allTime?.let { a ->
@@ -104,6 +116,8 @@ fun AnalyticsScreen(vm: AppViewModel) {
                 KeyValue("Cycling distance", "${Fmt.km(a.cycleDistanceM, 1)} km")
                 KeyValue("Rides", "${a.rides}")
                 KeyValue("Time riding", Fmt.durationShort(a.cycleElapsedMs))
+                KeyValue("Running / jogging / treadmill", "${Fmt.km(a.runDistanceM, 1)} km in ${a.runSessions} sessions")
+                KeyValue("Exercise", "${Fmt.durationShort(a.exerciseMs)} in ${a.exerciseSessions} sessions")
             }
         }
         Spacer(Modifier.height(16.dp))

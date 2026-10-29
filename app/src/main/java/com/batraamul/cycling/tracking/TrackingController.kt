@@ -2,6 +2,7 @@ package com.batraamul.cycling.tracking
 
 import android.content.Context
 import android.content.Intent
+import com.batraamul.cycling.core.ActivityType
 import androidx.core.content.ContextCompat
 
 /**
@@ -20,6 +21,11 @@ class TrackingController(private val context: Context, private val engine: Track
     suspend fun startCycling(isCalibration: Boolean): CommandResult {
         if (!engine.status.value.engineRunning) engine.restore(fromForeground = true)
         return engine.startCycling(isCalibration).also { refresh() }
+    }
+
+    suspend fun startSession(type: ActivityType): CommandResult {
+        if (!engine.status.value.engineRunning) engine.restore(fromForeground = true)
+        return engine.startSession(type).also { refresh() }
     }
 
     suspend fun pause() = engine.pauseRide().also { refresh() }

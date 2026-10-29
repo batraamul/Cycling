@@ -4,6 +4,7 @@ import android.app.Application
 import com.batraamul.cycling.core.SystemClock
 import com.batraamul.cycling.data.AppDatabase
 import com.batraamul.cycling.data.AppRepository
+import com.batraamul.cycling.data.BackupManager
 import com.batraamul.cycling.tracking.AndroidEnvironment
 import com.batraamul.cycling.tracking.AndroidLocationFeed
 import com.batraamul.cycling.tracking.AndroidStepSensor
@@ -47,4 +48,5 @@ class AppContainer(app: Application) {
     )
     val controller = TrackingController(app, engine)
     val repository = AppRepository(db, SystemClock, environment)
+    val backup = BackupManager(db, SystemClock, environment)
 }

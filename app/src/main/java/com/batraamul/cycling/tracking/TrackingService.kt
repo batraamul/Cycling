@@ -16,6 +16,7 @@ import com.batraamul.cycling.CyclingApp
 import com.batraamul.cycling.MainActivity
 import com.batraamul.cycling.R
 import android.text.format.DateFormat
+import com.batraamul.cycling.core.ActivityType
 import com.batraamul.cycling.core.PAUSED_INDEFINITELY
 import com.batraamul.cycling.core.SystemClock
 import java.util.Date
@@ -110,9 +111,15 @@ class TrackingService : LifecycleService(), EngineHooks {
         getSystemService(NotificationManager::class.java).notify(NOTIF_ALERT, n)
     }
 
+    override fun onSessionFinished(discarded: Boolean) {
+        if (!discarded) com.batraamul.cycling.backup.DriveBackup.backupSoon(this)
+    }
+
     // ---------------- foreground handling ----------------
 
-    private fun wantsLocationType(s: LiveStatus) = s.mode.mode == TrackingMode.CYCLING && !s.mode.rideInterrupted
+    /** Location type only for GPS activities: treadmill/exercise run as a plain health service. */
+    private fun wantsLocationType(s: LiveStatus) =
+        s.mode.inSession && (s.mode.sessionType ?: ActivityType.CYCLING).usesGps && !s.mode.rideInterrupted
 
     private fun goForeground(s: LiveStatus): Boolean {
         val env = container.environment
@@ -170,13 +177,18 @@ class TrackingService : LifecycleService(), EngineHooks {
             .setContentIntent(openAppIntent(this))
         val ride = s.ride
         when {
-            s.mode.mode == TrackingMode.CYCLING && ride != null -> {
+            s.mode.inSession && ride != null -> {
+                val t = ride.type
                 val km = String.format(Locale.getDefault(), "%.2f km", ride.correctedDistanceM / 1000)
+                val detail = listOfNotNull(
+                    km.takeIf { t.hasDistance },
+                    "${nf.format(ride.steps)} steps".takeIf { t.countsSteps },
+                ).joinToString(" · ").ifEmpty { "Timer running" }
                 when {
-                    s.mode.rideInterrupted -> b.setContentTitle("Ride interrupted — Walking Paused").setContentText("$km · Open the app to resume GPS or finish")
-                    s.mode.ridePaused -> b.setContentTitle("Ride paused — Walking Paused").setContentText(km)
+                    s.mode.rideInterrupted -> b.setContentTitle("${t.label} interrupted — Walking Paused").setContentText("$detail · Open the app to resume GPS or finish")
+                    s.mode.ridePaused -> b.setContentTitle("${t.label} paused — Walking Paused").setContentText(detail)
                         .addAction(0, "Resume", serviceIntent(ACTION_RESUME))
-                    else -> b.setContentTitle("Cycling Active — Walking Paused").setContentText(km)
+                    else -> b.setContentTitle("${t.icon} ${t.label} Active — Walking Paused").setContentText(detail)
                         .setUsesChronometer(true).setWhen(System.currentTimeMillis() - ride.elapsedAt(System.currentTimeMillis()))
                         .addAction(0, "Pause", serviceIntent(ACTION_PAUSE))
                 }

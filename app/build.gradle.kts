@@ -26,8 +26,8 @@ val releaseStoreFile = secret("CYCLING_KEYSTORE_PATH", "storeFile")
 val hasReleaseSigning = releaseStoreFile != null && file(releaseStoreFile).exists()
 
 // Version: bump versionCode for every release you install over an older one.
-val appVersionCode = 2
-val appVersionName = "1.1.0"
+val appVersionCode = 3
+val appVersionName = "1.2.0"
 
 android {
     namespace = "com.batraamul.cycling"
@@ -76,6 +76,11 @@ android {
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true   // needed by Robolectric
+        unitTests.all {
+            // ./gradlew testDebugUnitTest -Pscreenshots  → renders every theme to app/build/screenshots/
+            it.systemProperty("screenshots", project.hasProperty("screenshots").toString())
+            it.systemProperty("screenshotDir", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
+        }
     }
     // Exported Room schemas are added to DEBUG assets so the Robolectric migration test can rebuild old
     // database versions. (Robolectric reads the variant's merged assets.) They are never in the release APK.
@@ -121,10 +126,14 @@ dependencies {
     ksp(libs.room.compiler)
 
     implementation(libs.coroutines.android)
+    implementation(libs.work.runtime)       // daily automatic backup
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.room.testing)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)     // screenshot test (opt-in, see ScreenshotTest)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

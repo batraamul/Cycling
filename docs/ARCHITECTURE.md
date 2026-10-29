@@ -79,7 +79,37 @@ Doppler-stationary gate) → accepted points are batched (15 points / 30 s) and 
 | `tracking/TrackingService.kt` | Thin Android shell: foreground type, notification, start/stop. |
 | `tracking/AndroidSources.kt` | Real sensors: hardware counter → wake-up accelerometer → accelerometer + timed wake lock; GPS via `LocationManager`. |
 | `data/Daos.kt` | SQL, including the atomic transactions and day-aggregated analytics queries. |
-| `ui/theme/*` | 8 `ThemeSpec`s + procedural vector artwork (no bitmaps). |
+| `core/ActivityType.kt` | Cycling, Running, Jogging, Treadmill, Exercise — each declares `usesGps` / `countsSteps`; the engine reads these flags instead of special-casing names. |
+| `data/BackupCodec.kt` | Streaming JSON backup format (JsonWriter/JsonReader: memory stays small however long the history). |
+| `data/BackupManager.kt` | Export, preview and **merge-restore** in one transaction (never deletes; idempotent). |
+| `backup/DriveBackup.kt` | Storage Access Framework file in Google Drive, persisted write permission, WorkManager daily job. |
+| `ui/theme/*` | 10 `ThemeSpec`s, procedural vector artwork and background textures (no bitmaps). |
+| `ui/components/Components.kt` | Shared cards, tiles, `ActionButton` / `OutlineActionButton` (≥ 56 dp, contrast-checked labels). |
+
+## 4a. Activity sessions (v1.2.0)
+The mode `SESSION` (called `CYCLING` before v1.2.0; the old stored value is still understood) means "an activity
+is being recorded". The session's `ActivityType` decides the sensors:
+
+| Type | GPS | Step sensor → session | Distance |
+|---|---|---|---|
+| Cycling | ✓ | – | GPS × cycling calibration factor |
+| Running / Jogging | ✓ | ✓ | GPS (no factor: it was measured on a bike) |
+| Treadmill | – | ✓ | steps × step length (running length if cadence ≥ 140 and calibrated) |
+| Exercise | – | – | none; time + MET 5.0 calories |
+
+Daily walking is paused during every session, exactly as for cycling. Session steps are stored on the session row
+and saved in the same transaction as the step-counter baseline (`TrackingDao.commitSession`) — the same
+no-duplicates rule as daily walking. Treadmill/exercise need no location type for the foreground service, so they
+continue after a reboot instead of becoming "interrupted".
+
+## 4b. Backup to Google Drive without the INTERNET permission
+The app writes the backup through the Storage Access Framework: the user creates `Cycling-backup.json` in a Drive
+folder using the system file picker; the app keeps a persistable URI permission and overwrites that file daily
+(WorkManager, battery-not-low) and a few minutes after each finished activity. The **Drive app** uploads it. So
+there is no Google sign-in, API key or Cloud project in this app, and no network code. Safety rules: an automatic
+backup is skipped while the database is empty (a fresh install must not overwrite the good copy before restore);
+restore is a merge in one transaction (higher step count per day wins; sessions matched by start time; nothing
+deleted); a damaged or newer-format file is refused with nothing changed.
 
 ## 5. Calibration design
 - **Step length:** the measured value is stored and used as-is. The height formula (0.415 × height) is used only
@@ -113,3 +143,8 @@ therefore disabled. Upgrading to AGP 9 is a planned, separate step.
 - A ride interrupted by a reboot loses the distance during the gap.
 - Calorie values are estimates (Compendium of Physical Activities METs for cycling; 0.5 kcal/kg/km walking).
 - The accelerometer fallback algorithm is verified on synthetic signals only; it must be validated on the phone.
+- Treadmill distance depends on the step length: calibrate a running step length for treadmill running.
+- Jogging and Running record identically (GPS + steps); they are separate labels for your history.
+- Automatic Drive backups depend on the Drive app keeping write access to the chosen file; if it is lost, Settings
+  shows "Last backup failed" and asks you to choose the file again. Not yet verified on a phone.
+- The backup file is not encrypted; it is protected by your Google account.

@@ -3,6 +3,7 @@ package com.batraamul.cycling.integration
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.batraamul.cycling.core.ActivityType
 import com.batraamul.cycling.core.Clock
 import com.batraamul.cycling.core.GpsFix
 import com.batraamul.cycling.core.GpsQuality
@@ -137,7 +138,7 @@ class TrackingEngineIntegrationTest {
         assertEquals(100L, todaySteps())                                         // walking total saved first
         assertFalse("step detector must stop during the ride", steps.active)
         assertTrue(gps.active)
-        assertEquals(TrackingMode.CYCLING, mode())
+        assertEquals(TrackingMode.SESSION, mode())
 
         engine.injectCounter(10_600)                                            // phone jiggling while pedalling
         ride(engine, 200)                                                       // ≈ 1 km
@@ -184,7 +185,7 @@ class TrackingEngineIntegrationTest {
         env.boot = 8                                                                 // phone restarted
         val revived = newEngine()
         revived.restore(fromForeground = false)                                       // started by BootReceiver
-        assertEquals(TrackingMode.CYCLING, mode())
+        assertEquals(TrackingMode.SESSION, mode())
         assertTrue(db.tracking().state()!!.rideInterrupted)
         assertTrue(TrackingIssue.RIDE_INTERRUPTED in revived.status.value.issues)
         assertFalse(gps.active)
@@ -365,6 +366,148 @@ class TrackingEngineIntegrationTest {
     fun cannotPauseStepsDuringARide() = runBlocking {
         engine.restore(true)
         engine.startCycling(false)
+        assertTrue(engine.pauseSteps(PAUSED_INDEFINITELY) is CommandResult.Failed)
+    }
+
+    // ---------------- v1.2.0: activity types ----------------
+
+    @Test
+    fun runningStepsBelongToTheSessionNotToDailyWalking() = runBlocking {
+        engine.restore(true)
+        engine.injectCounter(10_000); engine.injectCounter(10_100)            // 100 walking steps
+        val r = engine.startSession(ActivityType.RUNNING)
+        assertTrue(r is CommandResult.Ok)
+        val id = (r as CommandResult.Ok).rideId!!
+        assertEquals(ActivityType.RUNNING, db.tracking().state()!!.modeState().sessionType)
+        assertTrue("GPS on", gps.active); assertTrue("step sensor on for the run", steps.active)
+
+        engine.injectCounter(10_150)                 // first reading in the run: baseline only
+        engine.injectCounter(10_650)                 // 500 running steps
+        ride(engine, 200)                            // ~1 km by GPS
+        engine.finishRide()
+
+        val run = db.tracking().ride(id)!!
+        assertEquals("RUNNING", run.activityType)
+        assertEquals(500L, run.steps)
+        assertEquals(1000.0, run.correctedDistanceM, 30.0)
+        assertEquals(1.0 * 70 * run.correctedDistanceM / 1000, run.kcal, 0.5)   // running ≈ 1 kcal/kg/km
+        assertEquals("daily walking keeps only its own steps", 100L, todaySteps())
+
+        // After the run, walking restarts from a fresh baseline: the 500 running steps are not re-added.
+        engine.injectCounter(10_700); engine.injectCounter(10_760)
+        engine.flushNow()
+        assertEquals(160L, todaySteps())
+        val day = repo.period(clock.today(), clock.today()).first().days.first()
+        assertEquals(660L, day.steps)                // walking 160 + running 500, each counted once
+        assertEquals(500L, day.runSteps)
+        assertEquals(1, day.runSessions)
+    }
+
+    @Test
+    fun treadmillUsesStepsForDistanceAndNeedsNoGps() = runBlocking {
+        engine.restore(true)
+        gps.result = LocationFeed.StartResult.GPS_DISABLED          // indoors: GPS must not be required
+        val r = engine.startSession(ActivityType.TREADMILL)
+        assertTrue("treadmill starts without GPS", r is CommandResult.Ok)
+        assertFalse(gps.active)
+        engine.injectCounter(50_000); engine.injectCounter(51_000)  // 1000 steps
+        clock.now += 10 * 60_000
+        engine.finishRide()
+        val t = db.tracking().ride((r as CommandResult.Ok).rideId!!)!!
+        assertEquals(1000L, t.steps)
+        assertEquals(700.0, t.rawDistanceM, 1e-6)                  // 1000 × 0.70 m walking step length
+        assertEquals(1.0, t.factor, 0.0)                            // no GPS correction on a treadmill
+        assertEquals(0L, todaySteps())
+    }
+
+    @Test
+    fun exerciseRecordsTimeAndCaloriesWithSensorsOff() = runBlocking {
+        engine.restore(true)
+        val r = engine.startSession(ActivityType.EXERCISE) as CommandResult.Ok
+        assertFalse(steps.active); assertFalse(gps.active)
+        engine.injectCounter(1_000); engine.injectCounter(1_400)    // late/stray events are ignored
+        clock.now += 30 * 60_000
+        engine.finishRide()
+        val ex = db.tracking().ride(r.rideId!!)!!
+        assertEquals(30 * 60_000L, ex.elapsedMs)
+        assertEquals(0L, ex.steps)
+        assertEquals(5.0 * 70 * 0.5, ex.kcal, 1e-6)                // MET 5 × 70 kg × 0.5 h
+        assertEquals(0L, todaySteps())
+        assertTrue(steps.active)                                    // walking resumed
+    }
+
+    @Test
+    fun runningStepsAreNotDuplicatedAfterProcessDeath() = runBlocking {
+        engine.restore(true)
+        val id = (engine.startSession(ActivityType.RUNNING) as CommandResult.Ok).rideId!!
+        engine.injectCounter(2_000); engine.injectCounter(2_300)    // 300 steps
+        engine.flushNow()                                           // saved with its baseline
+        // Android kills the process; a new engine restores the run and the sensor replays its last value.
+        val e2 = newEngine()
+        e2.restore(fromForeground = true)
+        e2.injectCounter(2_300)                                     // replay of the saved value → +0 (no duplicate)
+        e2.injectCounter(2_400)                                     // +100
+        e2.finishRide()
+        assertEquals(400L, db.tracking().ride(id)!!.steps)
+    }
+
+    @Test
+    fun runningStepsTakenWhileTheAppWasDeadAreKept() = runBlocking {
+        engine.restore(true)
+        val id = (engine.startSession(ActivityType.RUNNING) as CommandResult.Ok).rideId!!
+        engine.injectCounter(2_000); engine.injectCounter(2_300)    // 300 steps, saved with baseline 2300
+        engine.flushNow()
+        val e2 = newEngine()
+        e2.restore(fromForeground = true)
+        e2.injectCounter(2_450)                                     // 150 steps happened while the process was dead
+        e2.finishRide()
+        assertEquals("saved baseline lets the restarted app add the gap", 450L, db.tracking().ride(id)!!.steps)
+    }
+
+    @Test
+    fun pausedTreadmillDoesNotCountSteps() = runBlocking {
+        engine.restore(true)
+        val id = (engine.startSession(ActivityType.TREADMILL) as CommandResult.Ok).rideId!!
+        engine.injectCounter(5_000); engine.injectCounter(5_200)    // 200
+        engine.pauseRide()
+        assertFalse("sensor off while paused", steps.active)
+        engine.resumeRide()
+        assertTrue(steps.active)
+        engine.injectCounter(5_900)                                 // first reading after resume = new baseline (700 paused steps ignored)
+        engine.injectCounter(5_950)                                 // +50
+        engine.finishRide()
+        assertEquals(250L, db.tracking().ride(id)!!.steps)
+    }
+
+    @Test
+    fun cyclingCalibrationFactorIsNotAppliedToRunning() = runBlocking {
+        db.settings().save(db.settings().get()!!.copy(gpsFactor = 1.05))
+        engine.restore(true)
+        val run = (engine.startSession(ActivityType.RUNNING) as CommandResult.Ok).rideId!!
+        engine.finishRide()
+        val bike = (engine.startCycling(false) as CommandResult.Ok).rideId!!
+        engine.finishRide()
+        assertEquals(1.0, db.tracking().ride(run)!!.factor, 0.0)
+        assertEquals(1.05, db.tracking().ride(bike)!!.factor, 0.0)
+    }
+
+    @Test
+    fun treadmillContinuesAfterRestartFromBackground() = runBlocking {
+        engine.restore(true)
+        engine.startSession(ActivityType.TREADMILL)
+        val e2 = newEngine()
+        e2.restore(fromForeground = false)                          // e.g. after a reboot: no GPS needed, so no interruption
+        val ms = db.tracking().state()!!.modeState()
+        assertFalse(ms.rideInterrupted)
+        assertTrue(ms.countsSessionSteps)
+        assertTrue(steps.active)
+    }
+
+    @Test
+    fun onlyOneActivityAtATime() = runBlocking {
+        engine.restore(true)
+        assertTrue(engine.startSession(ActivityType.JOGGING) is CommandResult.Ok)
+        assertTrue(engine.startSession(ActivityType.CYCLING) is CommandResult.Failed)
         assertTrue(engine.pauseSteps(PAUSED_INDEFINITELY) is CommandResult.Failed)
     }
 }

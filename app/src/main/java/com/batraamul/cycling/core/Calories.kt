@@ -27,4 +27,21 @@ object Calories {
 
     /** Walking: roughly 0.5 kcal per kg of body mass per km (net walking cost, a common approximation). */
     fun walkingKcal(weightKg: Double, distanceM: Double): Double = 0.5 * weightKg * distanceM / 1000.0
+
+    /**
+     * Running, jogging and treadmill: about 1 kcal per kg of body mass per km, almost independent
+     * of speed (a well-known rule of thumb for gross running cost).
+     */
+    fun runningKcal(weightKg: Double, distanceM: Double): Double = 1.0 * weightKg * distanceM / 1000.0
+
+    /** General exercise / gym workout: MET 5.0 (moderate effort, Compendium of Physical Activities). */
+    const val EXERCISE_MET = 5.0
+    fun exerciseKcal(weightKg: Double, activeMs: Long): Double = EXERCISE_MET * weightKg * activeMs / 3_600_000.0
+
+    /** Estimate for a finished session of any type. */
+    fun sessionKcal(type: ActivityType, weightKg: Double, distanceM: Double, movingMs: Long, elapsedMs: Long): Double = when (type) {
+        ActivityType.CYCLING -> cyclingKcal(weightKg, distanceM, movingMs)
+        ActivityType.RUNNING, ActivityType.JOGGING, ActivityType.TREADMILL -> runningKcal(weightKg, distanceM)
+        ActivityType.EXERCISE -> exerciseKcal(weightKg, elapsedMs)
+    }
 }
