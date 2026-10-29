@@ -8,18 +8,20 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
-/** Aggregated cycling numbers for one day. */
+/** Aggregated session numbers for one day and one activity type. */
 data class DayRideTotals(
     val day: String,
+    val activityType: String,
     val distanceM: Double,
     val rawDistanceM: Double,
     val elapsedMs: Long,
     val movingMs: Long,
     val rides: Int,
     val kcal: Double,
+    val steps: Long,
 )
 
-data class Totals(val distanceM: Double?, val elapsedMs: Long?, val rides: Int, val kcal: Double?)
+data class Totals(val activityType: String, val distanceM: Double?, val elapsedMs: Long?, val rides: Int, val kcal: Double?, val steps: Long?)
 data class StepTotals(val steps: Long?, val walkDistanceM: Double?, val days: Int)
 
 @Dao
@@ -106,6 +108,14 @@ abstract class TrackingDao {
         return id
     }
 
+    /** Session progress + tracker state (incl. step-counter baseline) in ONE transaction. */
+    @Transaction
+    open suspend fun commitSession(ride: Ride, points: List<RoutePoint>, state: TrackerStateEntity) {
+        if (points.isNotEmpty()) insertPoints(points)
+        saveRide(ride)
+        saveState(state)
+    }
+
     @Transaction
     open suspend fun endRide(ride: Ride?, deleteRideId: Long?, newState: TrackerStateEntity) {
         if (ride != null) saveRide(ride)
@@ -121,14 +131,36 @@ abstract class TrackingDao {
     abstract fun completedCountFlow(): Flow<Int>
 
     @Query(
-        """SELECT day, SUM(rawDistanceM * factor) AS distanceM, SUM(rawDistanceM) AS rawDistanceM,
-           SUM(elapsedMs) AS elapsedMs, SUM(movingMs) AS movingMs, COUNT(*) AS rides, SUM(kcal) AS kcal
-           FROM ride WHERE status = 'COMPLETED' AND day BETWEEN :from AND :to GROUP BY day ORDER BY day"""
+        """SELECT day, activityType, SUM(rawDistanceM * factor) AS distanceM, SUM(rawDistanceM) AS rawDistanceM,
+           SUM(elapsedMs) AS elapsedMs, SUM(movingMs) AS movingMs, COUNT(*) AS rides, SUM(kcal) AS kcal, SUM(steps) AS steps
+           FROM ride WHERE status = 'COMPLETED' AND day BETWEEN :from AND :to GROUP BY day, activityType ORDER BY day"""
     )
     abstract fun rideTotalsByDayFlow(from: String, to: String): Flow<List<DayRideTotals>>
 
-    @Query("SELECT SUM(rawDistanceM * factor) AS distanceM, SUM(elapsedMs) AS elapsedMs, COUNT(*) AS rides, SUM(kcal) AS kcal FROM ride WHERE status = 'COMPLETED'")
-    abstract fun rideTotalsFlow(): Flow<Totals>
+    @Query(
+        """SELECT activityType, SUM(rawDistanceM * factor) AS distanceM, SUM(elapsedMs) AS elapsedMs, COUNT(*) AS rides,
+           SUM(kcal) AS kcal, SUM(steps) AS steps FROM ride WHERE status = 'COMPLETED' GROUP BY activityType"""
+    )
+    abstract fun rideTotalsFlow(): Flow<List<Totals>>
+
+    // ---------- backup / restore ----------
+    @Query("SELECT * FROM daily_activity ORDER BY day")
+    abstract suspend fun allDays(): List<DailyActivity>
+
+    @Query("SELECT * FROM ride WHERE status = 'COMPLETED' ORDER BY startTimeMs")
+    abstract suspend fun allCompletedRides(): List<Ride>
+
+    @Query("SELECT startTimeMs FROM ride")
+    abstract suspend fun allRideStartTimes(): List<Long>
+
+    @Query("SELECT COUNT(*) FROM daily_activity")
+    abstract suspend fun dayCount(): Int
+
+    @Query("SELECT COUNT(*) FROM ride WHERE status = 'COMPLETED'")
+    abstract suspend fun completedCount(): Int
+
+    @Query("SELECT COUNT(*) FROM ride WHERE startTimeMs = :startTimeMs")
+    abstract suspend fun countRidesStartingAt(startTimeMs: Long): Int
 }
 
 @Dao
@@ -164,4 +196,16 @@ abstract class CalibrationDao {
 
     @Query("UPDATE gps_calibration SET applied = 0")
     abstract suspend fun unapplyAllGps()
+
+    @Query("SELECT * FROM step_calibration ORDER BY timeMs")
+    abstract suspend fun allStep(): List<StepCalibrationRecord>
+
+    @Query("SELECT COUNT(*) FROM step_calibration WHERE timeMs = :timeMs AND kind = :kind")
+    abstract suspend fun countStep(timeMs: Long, kind: String): Int
+
+    @Query("SELECT COUNT(*) FROM gps_calibration WHERE timeMs = :timeMs")
+    abstract suspend fun countGps(timeMs: Long): Int
+
+    @Query("SELECT * FROM gps_calibration ORDER BY timeMs")
+    abstract suspend fun allGps(): List<GpsCalibrationRecord>
 }

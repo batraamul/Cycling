@@ -1,5 +1,6 @@
 package com.batraamul.cycling.data
 
+import com.batraamul.cycling.core.ActivityType
 import com.batraamul.cycling.core.Calories
 import com.batraamul.cycling.core.Clock
 import com.batraamul.cycling.core.Confidence
@@ -20,17 +21,29 @@ import java.time.LocalDate
 
 data class DaySummary(
     val date: LocalDate,
-    val steps: Long,
+    /** Ordinary all-day walking steps (DailyActivity). */
+    val walkSteps: Long,
     val walkDistanceM: Double,
     val cycleDistanceM: Double,
     val cycleRawDistanceM: Double,
     val cycleElapsedMs: Long,
+    /** Number of cycling rides. */
     val rides: Int,
-    val walkKcal: Double,
-    val cycleKcal: Double,
+    /** Running + jogging + treadmill. */
+    val runDistanceM: Double = 0.0,
+    val runSteps: Long = 0,
+    val runElapsedMs: Long = 0,
+    val runSessions: Int = 0,
+    val exerciseMs: Long = 0,
+    val exerciseSessions: Int = 0,
+    val walkKcal: Double = 0.0,
+    val sessionKcal: Double = 0.0,
 ) {
-    val totalActiveDistanceM get() = walkDistanceM + cycleDistanceM
-    val totalKcal get() = walkKcal + cycleKcal
+    /** All steps of the day: walking + steps taken in running/jogging/treadmill sessions (never overlapping). */
+    val steps get() = walkSteps + runSteps
+    val totalActiveDistanceM get() = walkDistanceM + cycleDistanceM + runDistanceM
+    val totalKcal get() = walkKcal + sessionKcal
+    val activities get() = rides + runSessions + exerciseSessions
 }
 
 data class PeriodSummary(val days: List<DaySummary>) {
@@ -39,10 +52,18 @@ data class PeriodSummary(val days: List<DaySummary>) {
     val cycleDistanceM = days.sumOf { it.cycleDistanceM }
     val cycleElapsedMs = days.sumOf { it.cycleElapsedMs }
     val rides = days.sumOf { it.rides }
+    val runDistanceM = days.sumOf { it.runDistanceM }
+    val runElapsedMs = days.sumOf { it.runElapsedMs }
+    val runSessions = days.sumOf { it.runSessions }
+    val exerciseMs = days.sumOf { it.exerciseMs }
+    val exerciseSessions = days.sumOf { it.exerciseSessions }
     val kcal = days.sumOf { it.totalKcal }
 }
 
-data class AllTime(val steps: Long, val walkDistanceM: Double, val cycleDistanceM: Double, val rides: Int, val cycleElapsedMs: Long)
+data class AllTime(
+    val steps: Long, val walkDistanceM: Double, val cycleDistanceM: Double, val rides: Int, val cycleElapsedMs: Long,
+    val runDistanceM: Double = 0.0, val runSessions: Int = 0, val exerciseMs: Long = 0, val exerciseSessions: Int = 0,
+)
 
 data class GpsCalibrationStatus(
     val factor: Double,
@@ -74,17 +95,32 @@ class AppRepository(private val db: AppDatabase, private val clock: Clock, priva
     fun period(from: LocalDate, to: LocalDate): Flow<PeriodSummary> =
         combine(tracking.daysFlow(from.key(), to.key()), tracking.rideTotalsByDayFlow(from.key(), to.key()), settings) { walks, rides, s ->
             val w = walks.associateBy { it.day }
-            val r = rides.associateBy { it.day }
+            val r = rides.groupBy { it.day }
             val days = generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }.map { date ->
-                val dw = w[date.key()]; val dr = r[date.key()]
-                DaySummary(date, dw?.steps ?: 0, dw?.walkDistanceM ?: 0.0, dr?.distanceM ?: 0.0, dr?.rawDistanceM ?: 0.0,
-                    dr?.elapsedMs ?: 0, dr?.rides ?: 0, Calories.walkingKcal(s.weightKg, dw?.walkDistanceM ?: 0.0), dr?.kcal ?: 0.0)
+                val dw = w[date.key()]
+                val byType = (r[date.key()] ?: emptyList()).groupBy { ActivityType.of(it.activityType) }
+                val cyc = byType[ActivityType.CYCLING] ?: emptyList()
+                val run = byType.filterKeys { it.isRunLike }.values.flatten()
+                val ex = byType[ActivityType.EXERCISE] ?: emptyList()
+                DaySummary(date, dw?.steps ?: 0, dw?.walkDistanceM ?: 0.0,
+                    cycleDistanceM = cyc.sumOf { it.distanceM }, cycleRawDistanceM = cyc.sumOf { it.rawDistanceM },
+                    cycleElapsedMs = cyc.sumOf { it.elapsedMs }, rides = cyc.sumOf { it.rides },
+                    runDistanceM = run.sumOf { it.distanceM }, runSteps = run.sumOf { it.steps }, runElapsedMs = run.sumOf { it.elapsedMs },
+                    runSessions = run.sumOf { it.rides }, exerciseMs = ex.sumOf { it.elapsedMs }, exerciseSessions = ex.sumOf { it.rides },
+                    walkKcal = Calories.walkingKcal(s.weightKg, dw?.walkDistanceM ?: 0.0),
+                    sessionKcal = byType.values.flatten().sumOf { it.kcal })
             }.toList()
             PeriodSummary(days)
         }
 
-    val allTime: Flow<AllTime> = combine(tracking.stepTotalsFlow(), tracking.rideTotalsFlow()) { s, r ->
-        AllTime(s.steps ?: 0, s.walkDistanceM ?: 0.0, r.distanceM ?: 0.0, r.rides, r.elapsedMs ?: 0)
+    val allTime: Flow<AllTime> = combine(tracking.stepTotalsFlow(), tracking.rideTotalsFlow()) { s, totals ->
+        val by = totals.groupBy { ActivityType.of(it.activityType) }
+        val cyc = by[ActivityType.CYCLING] ?: emptyList()
+        val run = by.filterKeys { it.isRunLike }.values.flatten()
+        val ex = by[ActivityType.EXERCISE] ?: emptyList()
+        AllTime((s.steps ?: 0) + run.sumOf { it.steps ?: 0 }, s.walkDistanceM ?: 0.0, cyc.sumOf { it.distanceM ?: 0.0 },
+            cyc.sumOf { it.rides }, cyc.sumOf { it.elapsedMs ?: 0 },
+            run.sumOf { it.distanceM ?: 0.0 }, run.sumOf { it.rides }, ex.sumOf { it.elapsedMs ?: 0 }, ex.sumOf { it.rides })
     }
 
     val completedRideCount: Flow<Int> = tracking.completedCountFlow()

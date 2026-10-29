@@ -1,5 +1,6 @@
 package com.batraamul.cycling.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -10,7 +11,10 @@ import androidx.room.PrimaryKey
  *
  * The data model deliberately keeps these concepts separate:
  *   - ordinary daily steps & walking distance ........ DailyActivity
- *   - cycling distance / duration (per ride) .......... Ride (+ RoutePoint for the route)
+ *   - recorded activity sessions (per session) ........ Ride (+ RoutePoint for the route)
+ *       "Ride" is the historical name: since v1.2.0 a row can be cycling, running, jogging,
+ *       treadmill or exercise ([Ride.activityType]). Their steps are stored on the session,
+ *       never in DailyActivity, so nothing is counted twice.
  *   - total daily activity ............................ computed by queries combining both
  */
 
@@ -52,8 +56,13 @@ data class Ride(
     val lastFixMs: Long? = null,
     val segment: Int = 0,
     val kcal: Double = 0.0,
+    /** Added in schema v3 (app v1.2.0): kind of session; older rows are CYCLING. */
+    @ColumnInfo(defaultValue = "CYCLING") val activityType: String = "CYCLING",
+    /** Added in schema v3: steps taken during a running/jogging/treadmill session. */
+    @ColumnInfo(defaultValue = "0") val steps: Long = 0,
 ) {
     val correctedDistanceM: Double get() = rawDistanceM * factor
+    val type: com.batraamul.cycling.core.ActivityType get() = com.batraamul.cycling.core.ActivityType.of(activityType)
 }
 
 @Entity(
@@ -88,6 +97,8 @@ data class TrackerStateEntity(
     val lastFlushMs: Long = 0,
     /** Added in schema v2 (app v1.1.0): step counting paused until this time (Long.MAX_VALUE = until resumed). */
     val stepsPausedUntilMs: Long? = null,
+    /** Added in schema v3 (app v1.2.0): ActivityType of the active session, null if none. */
+    val sessionType: String? = null,
 )
 
 object StepSourceSetting {

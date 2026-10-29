@@ -37,7 +37,10 @@ import androidx.compose.ui.unit.dp
 import com.batraamul.cycling.ui.AppViewModel
 import com.batraamul.cycling.ui.BatteryCard
 import com.batraamul.cycling.ui.PermissionsCard
+import com.batraamul.cycling.ui.components.ActionButton
 import com.batraamul.cycling.ui.components.AppCard
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.batraamul.cycling.ui.components.Banner
 import com.batraamul.cycling.ui.has
 import com.batraamul.cycling.ui.rememberResumeTick
@@ -51,6 +54,11 @@ fun OnboardingScreen(vm: AppViewModel, onDone: () -> Unit) {
     var weight by rememberSaveable { mutableStateOf("70") }
     val ctx = LocalContext.current
     val tick = rememberResumeTick()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    // After "Restore from backup", show the restored height/weight instead of the defaults.
+    LaunchedEffect(settings?.heightCm, settings?.weightKg) {
+        settings?.let { height = it.heightCm.toString(); weight = it.weightKg.toString().removeSuffix(".0") }
+    }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(240.dp)) {
@@ -68,10 +76,12 @@ fun OnboardingScreen(vm: AppViewModel, onDone: () -> Unit) {
                     Text(
                         "This app works like a quiet fitness band in your pocket:\n\n" +
                             "• Walking is counted automatically, all day, even with the screen off.\n" +
-                            "• Cycling is recorded with GPS when you press “Start Cycling”. While a ride is recorded, step counting pauses so the same movement is never counted twice.\n" +
-                            "• Everything is stored only on this phone.",
+                            "• Cycling, running, jogging, treadmill and exercise sessions are recorded when you start them. During a session, daily step counting pauses so the same movement is never counted twice.\n" +
+                            "• Data stays on this phone. You can keep a backup in your own Google Drive.",
                         style = MaterialTheme.typography.bodyLarge,
                     )
+                    Text("Reinstalling after a phone reset?", style = MaterialTheme.typography.titleMedium)
+                    BackupCard(vm, compact = true)
                 }
                 1 -> {
                     Text("About you", style = MaterialTheme.typography.headlineMedium)
@@ -103,12 +113,14 @@ fun OnboardingScreen(vm: AppViewModel, onDone: () -> Unit) {
             val profileValid = h != null && h in 100..230 && w != null && w in 25.0..250.0
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 if (page > 0) TextButton(onClick = { page-- }) { Text("Back") } else Spacer(Modifier)
-                Button(
+                ActionButton(
+                    if (page < 3) "Continue" else "Start tracking",
                     enabled = page != 1 || profileValid,
                     onClick = {
                         if (page < 3) page++ else { vm.completeOnboarding(h ?: 170, w ?: 70.0); onDone() }
                     },
-                ) { Text(if (page < 3) "Continue" else "Start tracking", fontWeight = FontWeight.SemiBold) }
+                    height = 56.dp,
+                )
             }
             if (page == 1 && !profileValid) Text("Enter a height of 100–230 cm and a weight of 25–250 kg.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)

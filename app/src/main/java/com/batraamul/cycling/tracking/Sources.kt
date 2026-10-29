@@ -40,4 +40,6 @@ interface Environment {
 interface EngineHooks {
     fun onStateChanged(status: LiveStatus)
     fun onRideInterrupted()
+    /** A session was finished or discarded (used to trigger an automatic backup). */
+    fun onSessionFinished(discarded: Boolean) {}
 }

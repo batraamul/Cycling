@@ -14,10 +14,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-enum class Scene { MOUNTAINS, MONSOON, DUNES, COAST, NEON, AUTUMN, AURORA, VELODROME }
+enum class Scene { MOUNTAINS, MONSOON, DUNES, COAST, NEON, AUTUMN, AURORA, VELODROME, ARMY, AIR_FORCE }
+
+/** Subtle repeating pattern drawn behind every screen, so flat backgrounds get some depth. */
+enum class Texture { GRAIN, DOTS, DIAGONAL, GRID, TOPO, CAMO, CONTRAILS }
 
 /**
- * One visual theme. All eight share the same screens and components; only these values differ.
+ * One visual theme. All ten share the same screens and components; only these values differ.
  * The artwork is drawn from [scene] + [sky]/[layers] at runtime (vector, no images in the APK).
  */
 data class ThemeSpec(
@@ -35,41 +38,51 @@ data class ThemeSpec(
     val layers: List<Color>,
     val accent: Color,
     val scene: Scene,
+    val texture: Texture = Texture.GRAIN,
 )
 
 val AppThemes: List<ThemeSpec> = listOf(
     ThemeSpec(0, "Himalayan Dawn", "Snow peaks at first light", false,
         Color(0xFF3D5A80), Color(0xFFEE6C4D), Color(0xFF98C1D9), Color(0xFFFFF8F2), Color(0xFFFFFFFF), Color(0xFF1F2A3C),
         listOf(Color(0xFFFFD6A5), Color(0xFFFFADAD), Color(0xFFBDB2FF)),
-        listOf(Color(0xFF8E9AAF), Color(0xFF5E6B8C), Color(0xFF3D4A66)), Color(0xFFFFF4E0), Scene.MOUNTAINS),
+        listOf(Color(0xFF8E9AAF), Color(0xFF5E6B8C), Color(0xFF3D4A66)), Color(0xFFFFF4E0), Scene.MOUNTAINS, Texture.TOPO),
     ThemeSpec(1, "Monsoon Valley", "Green hills after the rain", false,
         Color(0xFF2D6A4F), Color(0xFF52B788), Color(0xFF74C69D), Color(0xFFF2F8F3), Color(0xFFFFFFFF), Color(0xFF173326),
         listOf(Color(0xFF9DB4C0), Color(0xFFC2DFE3), Color(0xFFE0FBFC)),
-        listOf(Color(0xFF95D5B2), Color(0xFF52B788), Color(0xFF2D6A4F)), Color(0xFFFFFFFF), Scene.MONSOON),
+        listOf(Color(0xFF95D5B2), Color(0xFF52B788), Color(0xFF2D6A4F)), Color(0xFFFFFFFF), Scene.MONSOON, Texture.DIAGONAL),
     ThemeSpec(2, "Thar Dunes", "Golden desert evenings", false,
         Color(0xFFA0522D), Color(0xFFE09F3E), Color(0xFF9E2A2B), Color(0xFFFFF8EC), Color(0xFFFFFFFF), Color(0xFF3B2412),
         listOf(Color(0xFFFFF1C1), Color(0xFFFFD380), Color(0xFFF6A15A)),
-        listOf(Color(0xFFF3C177), Color(0xFFE09F3E), Color(0xFFB8732D)), Color(0xFFFFFBEA), Scene.DUNES),
+        listOf(Color(0xFFF3C177), Color(0xFFE09F3E), Color(0xFFB8732D)), Color(0xFFFFFBEA), Scene.DUNES, Texture.GRAIN),
     ThemeSpec(3, "Coastal Breeze", "Sea air on a Konkan road", false,
         Color(0xFF006D77), Color(0xFFE29578), Color(0xFF83C5BE), Color(0xFFF1FAFB), Color(0xFFFFFFFF), Color(0xFF0B2E33),
         listOf(Color(0xFFE6F8FB), Color(0xFFCAF0F8), Color(0xFF90E0EF)),
-        listOf(Color(0xFF48CAE4), Color(0xFF0096C7), Color(0xFF023E8A)), Color(0xFFFFF3B0), Scene.COAST),
+        listOf(Color(0xFF48CAE4), Color(0xFF0096C7), Color(0xFF023E8A)), Color(0xFFFFF3B0), Scene.COAST, Texture.DOTS),
     ThemeSpec(4, "Midnight Neon", "City lights, empty roads", true,
         Color(0xFFFF4FA3), Color(0xFF00E5FF), Color(0xFFB388FF), Color(0xFF0B0B1A), Color(0xFF16162B), Color(0xFFECE9FF),
         listOf(Color(0xFF0B0B1A), Color(0xFF2A0E4A), Color(0xFF6A1B6E)),
-        listOf(Color(0xFF3A1C71), Color(0xFF1F1147), Color(0xFF0E0A24)), Color(0xFFFF4FA3), Scene.NEON),
+        listOf(Color(0xFF3A1C71), Color(0xFF1F1147), Color(0xFF0E0A24)), Color(0xFFFF4FA3), Scene.NEON, Texture.GRID),
     ThemeSpec(5, "Autumn Trail", "Falling leaves, quiet lanes", false,
         Color(0xFF9C2C1C), Color(0xFFE07A1F), Color(0xFF6B4226), Color(0xFFFBF4EC), Color(0xFFFFFFFF), Color(0xFF331A10),
         listOf(Color(0xFFFFE5C2), Color(0xFFFFC98B), Color(0xFFF4A261)),
-        listOf(Color(0xFFE07A1F), Color(0xFFBC4B26), Color(0xFF7F2A1A)), Color(0xFF5C3A21), Scene.AUTUMN),
+        listOf(Color(0xFFE07A1F), Color(0xFFBC4B26), Color(0xFF7F2A1A)), Color(0xFF5C3A21), Scene.AUTUMN, Texture.GRAIN),
     ThemeSpec(6, "Arctic Aurora", "Northern lights over ice", true,
         Color(0xFF4CE0B3), Color(0xFF7AA2FF), Color(0xFFB9F3E4), Color(0xFF07141F), Color(0xFF0F2131), Color(0xFFE3F4F8),
         listOf(Color(0xFF020B14), Color(0xFF0A2238), Color(0xFF123A52)),
-        listOf(Color(0xFFDDEFF5), Color(0xFFB6D3DE), Color(0xFF7FA7B8)), Color(0xFF4CE0B3), Scene.AURORA),
+        listOf(Color(0xFFDDEFF5), Color(0xFFB6D3DE), Color(0xFF7FA7B8)), Color(0xFF4CE0B3), Scene.AURORA, Texture.DOTS),
     ThemeSpec(7, "Velodrome Sunset", "Banked curves, golden hour", true,
         Color(0xFFFF8C42), Color(0xFFFFD166), Color(0xFFEF476F), Color(0xFF1A1020), Color(0xFF261830), Color(0xFFFBEFE6),
         listOf(Color(0xFF2B1A3A), Color(0xFF8E3B5C), Color(0xFFFF8C42)),
-        listOf(Color(0xFFB5523B), Color(0xFF6E2E3F), Color(0xFF3A1D2E)), Color(0xFFFFD166), Scene.VELODROME),
+        listOf(Color(0xFFB5523B), Color(0xFF6E2E3F), Color(0xFF3A1D2E)), Color(0xFFFFD166), Scene.VELODROME, Texture.DIAGONAL),
+    // Tribute themes: colours and scenery only — no official crests, badges or insignia are reproduced.
+    ThemeSpec(8, "Army", "Olive, khaki & camouflage", false,
+        Color(0xFF4B5320), Color(0xFF8A6D3B), Color(0xFF6B8E23), Color(0xFFF2EFE1), Color(0xFFFFFDF5), Color(0xFF1E2313),
+        listOf(Color(0xFFEDE6C8), Color(0xFFD9CFA5), Color(0xFFC0B486)),
+        listOf(Color(0xFF8F9466), Color(0xFF5E6B3A), Color(0xFF3B4723)), Color(0xFFC2B280), Scene.ARMY, Texture.CAMO),
+    ThemeSpec(9, "Air Force", "Formation flight, tricolour smoke", false,
+        Color(0xFF1D4E89), Color(0xFFFF9933), Color(0xFF138808), Color(0xFFEEF4FB), Color(0xFFFFFFFF), Color(0xFF0D1E33),
+        listOf(Color(0xFF0E3A6E), Color(0xFF3C7BC0), Color(0xFFB4D6F2)),
+        listOf(Color(0xFF9DB8D6), Color(0xFF6C93BD), Color(0xFF3F6A9A)), Color(0xFFFFFFFF), Scene.AIR_FORCE, Texture.CONTRAILS),
 )
 
 fun themeById(id: Int): ThemeSpec = AppThemes.getOrElse(id) { AppThemes[0] }
@@ -81,17 +94,17 @@ private fun ThemeSpec.colorScheme(): ColorScheme {
     return if (dark) darkColorScheme(
         primary = primary, onPrimary = onPrimary, secondary = secondary, tertiary = tertiary,
         background = background, onBackground = onSurface, surface = surface, onSurface = onSurface,
-        surfaceVariant = surface.copy(alpha = 1f).compositeOverMix(onSurface, 0.06f), onSurfaceVariant = onSurface.copy(alpha = 0.72f),
+        surfaceVariant = surface.copy(alpha = 1f).compositeOverMix(onSurface, 0.07f), onSurfaceVariant = onSurface.copy(alpha = 0.82f),
         primaryContainer = primary.copy(alpha = 0.22f), onPrimaryContainer = onSurface,
         secondaryContainer = secondary.copy(alpha = 0.22f), onSecondaryContainer = onSurface,
-        outline = onSurface.copy(alpha = 0.25f), error = Color(0xFFFF6B6B),
+        outline = onSurface.copy(alpha = 0.30f), error = Color(0xFFFF6B6B),
     ) else lightColorScheme(
         primary = primary, onPrimary = onPrimary, secondary = secondary, tertiary = tertiary,
         background = background, onBackground = onSurface, surface = surface, onSurface = onSurface,
-        surfaceVariant = background.compositeOverMix(primary, 0.06f), onSurfaceVariant = onSurface.copy(alpha = 0.70f),
+        surfaceVariant = background.compositeOverMix(primary, 0.08f), onSurfaceVariant = onSurface.copy(alpha = 0.80f),
         primaryContainer = primary.copy(alpha = 0.14f), onPrimaryContainer = onSurface,
         secondaryContainer = secondary.copy(alpha = 0.16f), onSecondaryContainer = onSurface,
-        outline = onSurface.copy(alpha = 0.20f), error = Color(0xFFB3261E),
+        outline = onSurface.copy(alpha = 0.28f), error = Color(0xFFB3261E),
     )
 }
 
@@ -105,8 +118,11 @@ private val AppTypography = Typography().run {
         displayLarge = displayLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = (-1).sp),
         displayMedium = displayMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
         headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold),
-        titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        labelLarge = labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp),
+        headlineSmall = headlineSmall.copy(fontWeight = FontWeight.Bold),
+        titleLarge = titleLarge.copy(fontWeight = FontWeight.Bold),
+        titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold),
+        labelLarge = labelLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp),
+        labelMedium = labelMedium.copy(fontWeight = FontWeight.SemiBold),
     )
 }
 

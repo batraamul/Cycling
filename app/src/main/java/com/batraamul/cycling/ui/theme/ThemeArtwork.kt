@@ -10,6 +10,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.PI
 import kotlin.math.abs
@@ -34,6 +36,8 @@ fun SceneArtwork(spec: ThemeSpec, modifier: Modifier = Modifier) {
             Scene.AUTUMN -> autumn(spec)
             Scene.AURORA -> aurora(spec)
             Scene.VELODROME -> velodrome(spec)
+            Scene.ARMY -> army(spec)
+            Scene.AIR_FORCE -> airForce(spec)
         }
     }
 }
@@ -196,6 +200,90 @@ private fun DrawScope.velodrome(s: ThemeSpec) {
             size = Size(w * 1.4f - i * w * 0.08f, h * 0.7f), style = Stroke(width = h * 0.035f))
     }
     cyclist(Offset(w * 0.3f, h * 0.73f), h * 0.1f, Color(0xFF1A1020))
+}
+
+/** Olive ranges at dusk; the nearest ridge is filled with a woodland camouflage pattern. */
+private fun DrawScope.army(s: ThemeSpec) {
+    val w = size.width; val h = size.height
+    drawCircle(Color(0xFFFFF3D0).copy(alpha = 0.9f), h * 0.12f, Offset(w * 0.78f, h * 0.3f))
+    drawCircle(Color.White.copy(alpha = 0.18f), h * 0.2f, Offset(w * 0.78f, h * 0.3f))
+    s.layers.take(2).forEachIndexed { i, c -> fillBelow(ridge(w, h * (0.58f + i * 0.12f), h * (0.2f - i * 0.06f), seed = i * 4 + 3, sharp = i == 0), c) }
+    // Foreground ridge, clipped so the camouflage blotches stay inside it.
+    val near = ridge(w, h * 0.84f, h * 0.06f, seed = 21)
+    near.lineTo(w, h); near.lineTo(0f, h); near.close()
+    drawPath(near, s.layers[2])
+    clipPath(near) { camoBlotches(Color(0xFF6B7A3A), Color(0xFF2E3519), Color(0xFF8C7A4E), scale = h * 0.07f) }
+    // Pine silhouettes along the middle ridge.
+    for (i in 0 until 7) {
+        val x = w * (0.06f + i * 0.14f) + (i % 2) * w * 0.03f
+        val base = h * 0.8f; val th = h * (0.18f + (i % 3) * 0.04f)
+        val p = Path(); p.moveTo(x, base - th); p.lineTo(x - th * 0.22f, base); p.lineTo(x + th * 0.22f, base); p.close()
+        drawPath(p, Color(0xFF2B3318))
+    }
+}
+
+/** Three jets in arrowhead formation trailing saffron, white and green smoke over the clouds. */
+private fun DrawScope.airForce(s: ThemeSpec) {
+    val w = size.width; val h = size.height
+    for (k in 0 until 4) { // soft cloud banks
+        val cx = w * (0.15f + k * 0.27f); val cy = h * (0.72f + (k % 2) * 0.06f)
+        val c = Color.White.copy(alpha = 0.55f)
+        drawCircle(c, h * 0.1f, Offset(cx, cy)); drawCircle(c, h * 0.13f, Offset(cx + h * 0.12f, cy - h * 0.04f)); drawCircle(c, h * 0.09f, Offset(cx + h * 0.25f, cy))
+    }
+    fillBelow(ridge(w, h * 0.9f, h * 0.04f, seed = 17), s.layers[2])
+    val lead = Offset(w * 0.72f, h * 0.3f)
+    val smoke = listOf(Color(0xFFFF9933), Color.White, Color(0xFF138808))
+    val jets = listOf(Offset(lead.x - w * 0.09f, lead.y + h * 0.1f), lead, Offset(lead.x - w * 0.09f, lead.y - h * 0.1f))
+    jets.forEachIndexed { i, j ->
+        // Smoke trail sweeping back to the left, widening as it ages.
+        val trail = Path(); trail.moveTo(j.x - h * 0.06f, j.y)
+        trail.cubicTo(j.x - w * 0.25f, j.y + h * 0.02f, j.x - w * 0.45f, j.y + h * 0.12f, 0f, j.y + h * 0.22f)
+        // Fade the smoke out towards the left so it never crosses the screen title and status text.
+        val fade = Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent, smoke[i].copy(alpha = 0.9f)), startX = 0f, endX = j.x)
+        val haze = Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent, smoke[i].copy(alpha = 0.3f)), startX = 0f, endX = j.x)
+        drawPath(trail, fade, style = Stroke(width = h * 0.045f, cap = StrokeCap.Round))
+        drawPath(trail, haze, style = Stroke(width = h * 0.09f, cap = StrokeCap.Round))
+        jet(j, h * 0.09f)
+    }
+}
+
+/** A generic delta-wing jet silhouette (not any specific aircraft or marking). */
+private fun DrawScope.jet(at: Offset, sz: Float) {
+    val c = Color(0xFF14243A)
+    val body = Path().apply {
+        moveTo(at.x + sz, at.y)                       // nose
+        lineTo(at.x - sz * 0.2f, at.y - sz * 0.12f)
+        lineTo(at.x - sz * 0.55f, at.y - sz * 0.62f)  // wing tip
+        lineTo(at.x - sz * 0.75f, at.y - sz * 0.6f)
+        lineTo(at.x - sz * 0.62f, at.y - sz * 0.1f)
+        lineTo(at.x - sz * 0.9f, at.y - sz * 0.3f)   // tail fin
+        lineTo(at.x - sz * 0.98f, at.y)
+        lineTo(at.x - sz * 0.9f, at.y + sz * 0.3f)
+        lineTo(at.x - sz * 0.62f, at.y + sz * 0.1f)
+        lineTo(at.x - sz * 0.75f, at.y + sz * 0.6f)
+        lineTo(at.x - sz * 0.55f, at.y + sz * 0.62f)
+        lineTo(at.x - sz * 0.2f, at.y + sz * 0.12f)
+        close()
+    }
+    drawPath(body, c)
+    drawCircle(Color(0xFF9FD3FF), sz * 0.09f, Offset(at.x + sz * 0.45f, at.y))
+}
+
+/** Irregular rounded blotches in three tones — the classic woodland camouflage look. */
+internal fun DrawScope.camoBlotches(a: Color, b: Color, c: Color, scale: Float, alpha: Float = 1f) {
+    val colors = listOf(a, b, c)
+    val cols = (size.width / (scale * 1.6f)).toInt() + 2
+    val rows = (size.height / (scale * 1.4f)).toInt() + 2
+    for (r in 0 until rows) for (k in 0 until cols) {
+        val i = r * 31 + k * 17
+        val x = k * scale * 1.6f + ((i * 37) % 100) / 100f * scale
+        val y = r * scale * 1.4f + ((i * 53) % 100) / 100f * scale * 0.6f
+        val col = colors[i % 3].let { it.copy(alpha = it.alpha * alpha) }
+        rotate(((i * 47) % 180).toFloat(), Offset(x, y)) {
+            drawOval(col, Offset(x - scale * 0.7f, y - scale * 0.35f), Size(scale * 1.4f, scale * 0.7f))
+            drawOval(col, Offset(x - scale * 0.1f, y - scale * 0.5f), Size(scale * 0.9f, scale * 0.6f))
+        }
+    }
 }
 
 /** Tiny stylised rider used in a couple of scenes. */

@@ -1,5 +1,6 @@
 package com.batraamul.cycling.tracking
 
+import com.batraamul.cycling.core.ActivityType
 import com.batraamul.cycling.core.GpsFix
 import com.batraamul.cycling.core.ModeState
 
@@ -24,6 +25,8 @@ data class LiveRide(
     val fixCount: Int,
     val meanAccuracyM: Double?,
     val route: List<GpsFix>,
+    val type: ActivityType = ActivityType.CYCLING,
+    val steps: Long = 0,
 ) {
     val correctedDistanceM: Double get() = rawDistanceM * factor
     fun elapsedAt(nowMs: Long): Long = elapsedMs + (activeSinceMs?.let { (nowMs - it).coerceAtLeast(0) } ?: 0)

@@ -1,5 +1,15 @@
 package com.batraamul.cycling.ui.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -52,8 +62,83 @@ fun AppCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        // A hairline border keeps cards visible on light, textured backgrounds and in bright sunlight.
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     ) { Column(Modifier.padding(18.dp), content = content) }
+}
+
+private fun Color.isDark() = luminance() < 0.3f
+
+/** Text/icon colour that stays readable on [background] (WCAG-style luminance check). */
+fun contentColorOn(background: Color): Color = if (background.luminance() > 0.4f) Color(0xFF111111) else Color.White
+
+/**
+ * The app's main call-to-action button: raised, with a subtle top-to-bottom sheen, a bold label and
+ * an optional emoji icon. At least 56 dp tall — comfortably above the 48 dp touch-target minimum,
+ * easy to hit with gloves or while walking.
+ */
+@Composable
+fun ActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: String? = null,
+    color: Color = MaterialTheme.colorScheme.primary,
+    enabled: Boolean = true,
+    height: Dp = 60.dp,
+) {
+    val shape = RoundedCornerShape(18.dp)
+    val base = if (enabled) color else color.copy(alpha = 0.38f)
+    val fg = contentColorOn(color).let { if (enabled) it else it.copy(alpha = 0.6f) }
+    Box(
+        modifier
+            .heightIn(min = height)
+            .shadow(if (enabled) 6.dp else 0.dp, shape, ambientColor = color, spotColor = color)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(lerp(base, Color.White, 0.16f), base, lerp(base, Color.Black, 0.10f))))
+            .border(1.dp, Color.White.copy(alpha = 0.22f), shape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) { Text(icon, fontSize = 22.sp); Spacer(Modifier.width(10.dp)) }
+            Text(text, color = fg, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+/** Secondary button: thick coloured outline on the surface colour. Same size rules as [ActionButton]. */
+@Composable
+fun OutlineActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: String? = null,
+    color: Color = MaterialTheme.colorScheme.primary,
+    enabled: Boolean = true,
+    height: Dp = 56.dp,
+) {
+    val shape = RoundedCornerShape(18.dp)
+    Box(
+        modifier
+            .heightIn(min = height)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(2.dp, if (enabled) color else color.copy(alpha = 0.35f), shape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) { Text(icon, fontSize = 20.sp); Spacer(Modifier.width(8.dp)) }
+            // Light colours (e.g. saffron) are darkened for the label so text keeps enough contrast on white.
+            val ink = if (color.luminance() > 0.35f && !MaterialTheme.colorScheme.surface.isDark()) lerp(color, Color.Black, 0.4f) else color
+            Text(text, color = if (enabled) ink else ink.copy(alpha = 0.5f), style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+    }
 }
 
 @Composable
@@ -67,18 +152,15 @@ fun StatTile(label: String, value: String, unit: String = "", modifier: Modifier
     Column(
         modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.16f), MaterialTheme.colorScheme.surfaceVariant)))
+            .drawBehind { drawRect(accent, size = Size(4.dp.toPx(), size.height)) }   // accent bar on the left edge
+            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)
             .semantics(mergeDescendants = true) { contentDescription = "$label $value $unit" },
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
-            Spacer(Modifier.width(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, style = NumberStyle.copy(fontSize = 22.sp), color = MaterialTheme.colorScheme.onSurface)
+            Text(value, style = NumberStyle.copy(fontSize = 24.sp), color = MaterialTheme.colorScheme.onSurface)
             if (unit.isNotEmpty()) {
                 Spacer(Modifier.width(3.dp))
                 Text(unit, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -140,7 +222,8 @@ fun ConfidenceChip(confidence: Confidence?, modifier: Modifier = Modifier) {
 fun Banner(text: String, modifier: Modifier = Modifier, warning: Boolean = true, action: (@Composable () -> Unit)? = null) {
     val c = if (warning) Color(0xFFE0A100) else MaterialTheme.colorScheme.primary
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.copy(alpha = 0.14f)).padding(14.dp),
+        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.copy(alpha = 0.16f))
+            .border(1.dp, c.copy(alpha = 0.45f), RoundedCornerShape(16.dp)).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(c))
